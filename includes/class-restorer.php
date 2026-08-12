@@ -28,6 +28,7 @@ class WPIM_Restorer {
                 'filename'   => basename( $meta['file'] ?? '' ),
                 'deleted_at' => $meta['deleted_at'] ?? '',
                 'backup_dir' => dirname( $meta_file ),
+                'storage'    => $meta['storage'] ?? 'local',
             ];
         }
 
@@ -47,15 +48,22 @@ class WPIM_Restorer {
 
         $upload_dir = wp_upload_dir();
         $backup_id_dir = WPIM_BACKUP_DELETED . '/' . $id;
+        $drive_files   = $meta['drive_files'] ?? [];
 
-        // Move files back
+        // Move files back (from local backup, or download from Google Drive)
         $files = $meta['files'] ?? [];
         foreach ( $files as $original_path ) {
             $rel  = str_replace( $upload_dir['basedir'] . DIRECTORY_SEPARATOR, '', $original_path );
             $src  = $backup_id_dir . '/' . $rel;
-            if ( ! file_exists( $src ) ) continue;
-            wp_mkdir_p( dirname( $original_path ) );
-            rename( $src, $original_path );
+
+            if ( file_exists( $src ) ) {
+                wp_mkdir_p( dirname( $original_path ) );
+                rename( $src, $original_path );
+            } elseif ( ! empty( $drive_files[ $rel ] ) ) {
+                if ( WPIM_Google_Drive::download_file( $drive_files[ $rel ], $original_path ) ) {
+                    WPIM_Google_Drive::delete_file( $drive_files[ $rel ] );
+                }
+            }
         }
 
         // Re-insert post
@@ -99,16 +107,22 @@ class WPIM_Restorer {
         $info = get_post_meta( $id, '_wpim_converted_to_webp', true );
         if ( ! $info ) return [ 'success' => false, 'message' => 'No conversion record found.' ];
 
-        $backup  = $info['backup'];
+        $backup   = $info['backup'];
         $original = $info['original'];
-        $webp    = $info['webp'];
+        $webp     = $info['webp'];
+        $storage  = $info['storage'] ?? 'local';
 
-        if ( ! file_exists( $backup ) ) return [ 'success' => false, 'message' => 'Backup file not found: ' . $backup ];
-
-        // Copy original back
         wp_mkdir_p( dirname( $original ) );
-        if ( ! copy( $backup, $original ) ) {
-            return [ 'success' => false, 'message' => 'Could not restore file.' ];
+
+        if ( $storage === 'gdrive' && ! empty( $info['drive_file_id'] ) ) {
+            if ( ! WPIM_Google_Drive::download_file( $info['drive_file_id'], $original ) ) {
+                return [ 'success' => false, 'message' => 'Could not download backup from Google Drive.' ];
+            }
+        } else {
+            if ( ! file_exists( $backup ) ) return [ 'success' => false, 'message' => 'Backup file not found: ' . $backup ];
+            if ( ! copy( $backup, $original ) ) {
+                return [ 'success' => false, 'message' => 'Could not restore file.' ];
+            }
         }
 
         // Remove WebP
@@ -128,7 +142,11 @@ class WPIM_Restorer {
         delete_post_meta( $id, '_wpim_converted_to_webp' );
 
         // Remove backup file
-        @unlink( $backup );
+        if ( $storage === 'gdrive' && ! empty( $info['drive_file_id'] ) ) {
+            WPIM_Google_Drive::delete_file( $info['drive_file_id'] );
+        } else {
+            @unlink( $backup );
+        }
 
         return [ 'success' => true, 'message' => "Attachment #{$id} reverted to original." ];
     }
@@ -154,14 +172,19 @@ class WPIM_Restorer {
 
         $items = [];
         foreach ( $rows as $row ) {
-            $info = maybe_unserialize( $row['meta_value'] );
+            $info    = maybe_unserialize( $row['meta_value'] );
+            $storage = $info['storage'] ?? 'local';
+            $backup_exists = ( $storage === 'gdrive' )
+                ? ! empty( $info['drive_file_id'] )
+                : file_exists( $info['backup'] ?? '' );
             $items[] = [
                 'id'           => $row['ID'],
                 'title'        => $row['post_title'],
                 'original'     => basename( $info['original'] ?? '' ),
                 'webp'         => basename( $info['webp'] ?? '' ),
                 'converted_at' => $info['converted_at'] ?? '',
-                'backup_exists'=> file_exists( $info['backup'] ?? '' ),
+                'storage'      => $storage,
+                'backup_exists'=> $backup_exists,
             ];
         }
 

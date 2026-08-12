@@ -346,7 +346,7 @@
             $.each(data.items, function(i, item) {
                 html += '<div class="wpim-restore-item">'
                       + '<div class="wpim-restore-item-info">'
-                      +   '<div class="wpim-restore-item-title">' + escHtml(item.title || 'Untitled') + '</div>'
+                      +   '<div class="wpim-restore-item-title">' + escHtml(item.title || 'Untitled') + storageBadge(item.storage) + '</div>'
                       +   '<div class="wpim-restore-item-meta">ID: ' + item.id + ' &nbsp;·&nbsp; ' + escHtml(item.filename) + ' &nbsp;·&nbsp; Deleted: ' + item.deleted_at + '</div>'
                       + '</div>'
                       + '<button class="wpim-btn wpim-btn-success wpim-btn-sm btn-restore-deleted" data-id="' + item.id + '">♻️ Restore</button>'
@@ -389,7 +389,7 @@
                 var warn = item.backup_exists ? '' : ' <em style="color:#d63638">(backup file missing)</em>';
                 html += '<div class="wpim-restore-item">'
                       + '<div class="wpim-restore-item-info">'
-                      +   '<div class="wpim-restore-item-title">' + escHtml(item.title) + warn + '</div>'
+                      +   '<div class="wpim-restore-item-title">' + escHtml(item.title) + storageBadge(item.storage) + warn + '</div>'
                       +   '<div class="wpim-restore-item-meta">ID: ' + item.id + ' &nbsp;·&nbsp; ' + escHtml(item.original) + ' → ' + escHtml(item.webp) + ' &nbsp;·&nbsp; ' + item.converted_at + '</div>'
                       + '</div>'
                       + '<button class="wpim-btn wpim-btn-sm btn-revert-converted" data-id="' + item.id + '"' + (item.backup_exists ? '' : ' disabled') + '>↩️ Revert</button>'
@@ -423,6 +423,12 @@
 
     function escHtml(str) {
         return $('<div>').text(str || '').html();
+    }
+
+    function storageBadge(storage) {
+        if (!storage || storage === 'local') return ' <span class="wpim-storage-badge local">Local</span>';
+        if (storage === 'gdrive') return ' <span class="wpim-storage-badge gdrive">Google Drive</span>';
+        return ' <span class="wpim-storage-badge mixed">Mixed</span>';
     }
 
     // ─── Init ─────────────────────────────────────────────────────────

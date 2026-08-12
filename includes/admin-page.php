@@ -1,4 +1,7 @@
-<?php if ( ! defined('ABSPATH') ) exit; ?>
+<?php
+if ( ! defined('ABSPATH') ) exit;
+$wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 'settings' : 'unattached';
+?>
 <div class="wpim-wrap" id="wpim-app">
     <div class="wpim-header">
         <div class="wpim-header-inner">
@@ -47,14 +50,15 @@
 
     <!-- Tabs -->
     <div class="wpim-tabs">
-        <button class="wpim-tab active" data-tab="unattached">🗂️ Unattached Images</button>
+        <button class="wpim-tab<?php echo $wpim_active_tab === 'unattached' ? ' active' : ''; ?>" data-tab="unattached">🗂️ Unattached Images</button>
         <button class="wpim-tab" data-tab="convert">🔄 WebP Converter</button>
         <button class="wpim-tab" data-tab="restore-deleted">♻️ Restore Deleted</button>
         <button class="wpim-tab" data-tab="restore-converted">↩️ Revert WebP</button>
+        <button class="wpim-tab<?php echo $wpim_active_tab === 'settings' ? ' active' : ''; ?>" data-tab="settings">⚙️ Backup Settings</button>
     </div>
 
     <!-- Tab: Unattached Images -->
-    <div class="wpim-tab-content active" id="tab-unattached">
+    <div class="wpim-tab-content<?php echo $wpim_active_tab === 'unattached' ? ' active' : ''; ?>" id="tab-unattached">
         <div class="wpim-toolbar">
             <label class="wpim-check-all-label">
                 <input type="checkbox" id="check-all"> Select All on Page
@@ -171,6 +175,75 @@
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-prev" disabled>← Prev</button>
                 <span id="converted-page-info">Page 1 of 1</span>
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-next" disabled>Next →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Backup Settings -->
+    <div class="wpim-tab-content<?php echo $wpim_active_tab === 'settings' ? ' active' : ''; ?>" id="tab-settings">
+        <div class="wpim-settings-panel">
+            <h2>⚙️ Backup Destination</h2>
+            <p>Choose where images are backed up before they're deleted or converted.</p>
+
+            <?php
+            $wpim_msg = isset( $_GET['wpim_msg'] ) ? sanitize_key( $_GET['wpim_msg'] ) : '';
+            $wpim_messages = [
+                'settings_saved'        => [ 'success', 'Backup settings saved.' ],
+                'gdrive_connected'      => [ 'success', 'Google Drive connected successfully.' ],
+                'gdrive_disconnected'   => [ 'info', 'Google Drive disconnected. Backup destination reset to WordPress (local).' ],
+                'gdrive_not_configured' => [ 'error', 'Please enter your Google OAuth Client ID and Client Secret and save before connecting.' ],
+                'gdrive_error'          => [ 'error', 'Could not connect to Google Drive. Please check your Client ID/Secret and try again.' ],
+            ];
+            if ( $wpim_msg && isset( $wpim_messages[ $wpim_msg ] ) ) :
+                list( $wpim_msg_type, $wpim_msg_text ) = $wpim_messages[ $wpim_msg ];
+                ?>
+                <div class="wpim-result-box wpim-msg-<?php echo esc_attr( $wpim_msg_type ); ?>" style="display:block"><?php echo esc_html( $wpim_msg_text ); ?></div>
+            <?php endif; ?>
+
+            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="wpim-settings-form">
+                <?php wp_nonce_field( 'wpim_backup_settings' ); ?>
+                <input type="hidden" name="action" value="wpim_save_backup_settings">
+
+                <?php $wpim_destination = get_option( 'wpim_backup_destination', 'local' ); ?>
+                <label class="wpim-radio-row">
+                    <input type="radio" name="backup_destination" value="local" <?php checked( $wpim_destination, 'local' ); ?>>
+                    <span><strong>WordPress (local storage)</strong> — backups are saved under <code>wp-content/../wp-image-manager-backup/</code> on this server.</span>
+                </label>
+                <label class="wpim-radio-row">
+                    <input type="radio" name="backup_destination" value="gdrive" <?php checked( $wpim_destination, 'gdrive' ); ?>>
+                    <span><strong>Google Drive</strong> — backups are uploaded to a "WP Image Manager Backups" folder in your connected Google Drive account. Falls back to local storage automatically if an upload fails.</span>
+                </label>
+
+                <h3>Google Drive OAuth App</h3>
+                <p class="wpim-settings-note">
+                    Create an OAuth 2.0 Client ID (type: Web application) in the
+                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>,
+                    enable the Google Drive API, and add this Authorized redirect URI:
+                </p>
+                <code class="wpim-redirect-uri"><?php echo esc_html( WPIM_Google_Drive::get_redirect_uri() ); ?></code>
+
+                <div class="wpim-field-row">
+                    <label for="gdrive_client_id">Client ID</label>
+                    <input type="text" id="gdrive_client_id" name="gdrive_client_id" value="<?php echo esc_attr( get_option( 'wpim_gdrive_client_id', '' ) ); ?>" autocomplete="off">
+                </div>
+                <div class="wpim-field-row">
+                    <label for="gdrive_client_secret">Client Secret</label>
+                    <input type="password" id="gdrive_client_secret" name="gdrive_client_secret" placeholder="<?php echo get_option( 'wpim_gdrive_client_secret' ) ? '••••••••  (leave blank to keep current)' : ''; ?>" autocomplete="off">
+                </div>
+
+                <button type="submit" class="wpim-btn wpim-btn-primary">Save Settings</button>
+            </form>
+
+            <div class="wpim-gdrive-status">
+                <?php if ( WPIM_Google_Drive::is_connected() ) : ?>
+                    <p>✅ Connected to Google Drive as <strong><?php echo esc_html( WPIM_Google_Drive::get_account_email() ); ?></strong></p>
+                    <a class="wpim-btn wpim-btn-outline wpim-btn-sm" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=wpim_gdrive_disconnect' ), 'wpim_gdrive_disconnect' ) ); ?>">Disconnect Google Drive</a>
+                <?php elseif ( WPIM_Google_Drive::is_configured() ) : ?>
+                    <p>Not connected yet.</p>
+                    <a class="wpim-btn wpim-btn-primary wpim-btn-sm" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=wpim_gdrive_connect' ), 'wpim_gdrive_connect' ) ); ?>">Connect Google Drive</a>
+                <?php else : ?>
+                    <p class="wpim-placeholder-sm">Enter and save a Client ID/Secret above to enable connecting.</p>
+                <?php endif; ?>
             </div>
         </div>
     </div>

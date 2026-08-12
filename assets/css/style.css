@@ -127,6 +127,32 @@
 .wpim-restore-item-meta { font-size: 11px; color: #646970; margin-top: 2px; }
 .wpim-placeholder-sm { color: #646970; text-align: center; padding: 30px; }
 
+/* Storage badge */
+.wpim-storage-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+.wpim-storage-badge.local { background: var(--wpim-bg); color: #646970; border: 1px solid var(--wpim-border); }
+.wpim-storage-badge.gdrive { background: #e8f0fe; color: #1a73e8; }
+.wpim-storage-badge.mixed { background: #fdf2d0; color: #8a6d00; }
+
+/* Settings Panel */
+.wpim-settings-panel { max-width: 700px; }
+.wpim-settings-panel h2 { margin: 0 0 4px; font-size: 18px; }
+.wpim-settings-panel h3 { margin: 24px 0 6px; font-size: 14px; }
+.wpim-settings-panel > p { color: #646970; margin: 0 0 16px; }
+.wpim-settings-note { font-size: 12.5px; color: #646970; margin: 0 0 8px; line-height: 1.5; }
+.wpim-redirect-uri { display: block; background: var(--wpim-bg); border: 1px solid var(--wpim-border); border-radius: 6px; padding: 8px 12px; font-size: 12px; margin-bottom: 16px; word-break: break-all; }
+.wpim-radio-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--wpim-border); border-radius: 6px; margin-bottom: 10px; cursor: pointer; font-size: 13px; }
+.wpim-radio-row:hover { border-color: var(--wpim-primary); }
+.wpim-radio-row input { margin-top: 3px; accent-color: var(--wpim-primary); }
+.wpim-field-row { margin-bottom: 14px; }
+.wpim-field-row label { display: block; font-weight: 600; font-size: 12.5px; margin-bottom: 4px; }
+.wpim-field-row input[type="text"], .wpim-field-row input[type="password"] { width: 100%; max-width: 420px; padding: 8px 10px; border: 1px solid var(--wpim-border); border-radius: 6px; font-size: 13px; }
+.wpim-settings-form { margin-bottom: 20px; }
+.wpim-gdrive-status { background: var(--wpim-bg); border-radius: 8px; padding: 16px; }
+.wpim-gdrive-status p { margin: 0 0 10px; font-size: 13px; }
+.wpim-msg-success { border-left-color: var(--wpim-success); }
+.wpim-msg-error { border-left-color: var(--wpim-danger); }
+.wpim-msg-info { border-left-color: var(--wpim-primary); }
+
 /* Spinner */
 .wpim-spinner-inline { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: wpim-spin .6s linear infinite; }
 @keyframes wpim-spin { to { transform: rotate(360deg); } }

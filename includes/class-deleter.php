@@ -12,8 +12,9 @@ class WPIM_Deleter {
     public function delete_batch( $ids ) {
         wpim_activate(); // Ensure backup dirs exist
 
-        $deleted = 0;
-        $errors  = [];
+        $deleted    = 0;
+        $errors     = [];
+        $use_gdrive = get_option( 'wpim_backup_destination', 'local' ) === 'gdrive' && WPIM_Google_Drive::is_connected();
 
         foreach ( $ids as $id ) {
             $id = intval( $id );
@@ -73,6 +74,15 @@ class WPIM_Deleter {
             }
 
             if ( $move_ok ) {
+                // Optionally upload the backed-up files to Google Drive, falling back
+                // to the local copy for any file that fails to upload.
+                if ( $use_gdrive ) {
+                    $storage     = $this->upload_backup_to_gdrive( $id, $files, $upload_dir );
+                    $meta_data['storage']     = $storage['storage'];
+                    $meta_data['drive_files'] = $storage['drive_files'];
+                    file_put_contents( WPIM_BACKUP_DELETED . '/' . $id . '/meta.json', json_encode( $meta_data, JSON_PRETTY_PRINT ) );
+                }
+
                 // Remove from WP database
                 wp_delete_attachment( $id, true );
                 $deleted++;
@@ -80,6 +90,47 @@ class WPIM_Deleter {
         }
 
         return [ 'deleted' => $deleted, 'errors' => $errors ];
+    }
+
+    /**
+     * Upload the locally-backed-up files for an attachment to Google Drive.
+     * Files that upload successfully are removed locally; files that fail
+     * are left in place as a fallback.
+     *
+     * @return array { storage: 'gdrive'|'local'|'mixed', drive_files: array<string,string> }
+     */
+    private function upload_backup_to_gdrive( $id, $files, $upload_dir ) {
+        $drive_files = [];
+        $any_failed  = false;
+        $any_ok      = false;
+
+        $folder_id = WPIM_Google_Drive::get_subfolder_id( 'deleted' );
+        if ( ! $folder_id ) {
+            return [ 'storage' => 'local', 'drive_files' => [] ];
+        }
+
+        foreach ( $files as $original_path ) {
+            $rel         = str_replace( $upload_dir['basedir'] . DIRECTORY_SEPARATOR, '', $original_path );
+            $backup_file = WPIM_BACKUP_DELETED . '/' . $id . '/' . $rel;
+            if ( ! file_exists( $backup_file ) ) continue;
+
+            $remote_name = $id . '_' . str_replace( [ '/', '\\' ], '_', $rel );
+            $file_id     = WPIM_Google_Drive::upload_file( $backup_file, $remote_name, $folder_id );
+
+            if ( $file_id ) {
+                $drive_files[ $rel ] = $file_id;
+                @unlink( $backup_file );
+                $any_ok = true;
+            } else {
+                $any_failed = true;
+            }
+        }
+
+        if ( $any_ok && ! $any_failed ) $storage = 'gdrive';
+        elseif ( $any_ok && $any_failed ) $storage = 'mixed';
+        else $storage = 'local';
+
+        return [ 'storage' => $storage, 'drive_files' => $drive_files ];
     }
 
     /**

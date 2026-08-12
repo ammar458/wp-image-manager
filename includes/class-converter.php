@@ -45,6 +45,24 @@ class WPIM_Converter {
         wp_mkdir_p( dirname( $backup_path ) );
         copy( $file, $backup_path );
 
+        $storage       = 'local';
+        $drive_file_id = '';
+
+        // Only offer the trackable (bulk-convert) path to Google Drive — new-upload
+        // conversions don't yet have a post ID/postmeta record to point at the file.
+        if ( ! $is_new && get_option( 'wpim_backup_destination', 'local' ) === 'gdrive' && WPIM_Google_Drive::is_connected() ) {
+            $folder_id = WPIM_Google_Drive::get_subfolder_id( 'converted' );
+            if ( $folder_id ) {
+                $remote_name = str_replace( [ '/', '\\' ], '_', $rel );
+                $file_id     = WPIM_Google_Drive::upload_file( $backup_path, $remote_name, $folder_id );
+                if ( $file_id ) {
+                    $drive_file_id = $file_id;
+                    $storage       = 'gdrive';
+                    @unlink( $backup_path );
+                }
+            }
+        }
+
         // If not a new upload, keep original in place (only remove it for new uploads where we replace in-flight)
         if ( $is_new ) {
             @unlink( $file );
@@ -53,6 +71,8 @@ class WPIM_Converter {
         return [
             'webp_path'       => $webp_path,
             'original_backup' => $backup_path,
+            'storage'         => $storage,
+            'drive_file_id'   => $drive_file_id,
         ];
     }
 
@@ -112,6 +132,8 @@ class WPIM_Converter {
                     'backup'     => $result['original_backup'],
                     'webp'       => $new_file,
                     'converted_at' => current_time('mysql'),
+                    'storage'       => $result['storage'],
+                    'drive_file_id' => $result['drive_file_id'],
                 ]);
 
                 $converted++;

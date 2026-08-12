@@ -261,22 +261,53 @@
         doDelete(ids);
     });
 
+    // Deleting sends real work per image (a Google Drive upload per file when
+    // that destination is selected, not just a local move), so a big batch is
+    // sent as several smaller requests instead of one huge one — this avoids
+    // PHP/host/proxy timeouts and gives a progress bar real percentages to show.
+    var DELETE_CHUNK_SIZE = 10;
+
     function doDelete(ids) {
         var $btns = $('#btn-delete-selected, #btn-delete-all-page');
         $btns.prop('disabled', true);
-        showProgress('#delete-progress', '#delete-progress-inner', '#delete-progress-text', 30, 'Moving ' + ids.length + ' images to backup…');
 
-        ajax('wpim_delete_batch', { ids: ids }, function(err, data) {
-            hideProgress('#delete-progress');
-            $btns.prop('disabled', false);
-            if (err) { toast('Delete error: ' + err, 'error'); return; }
-            state.selected = {};
-            var msg = '✅ Moved ' + data.deleted + ' image(s) to backup.';
-            if (data.errors && data.errors.length) msg += ' ⚠️ ' + data.errors.length + ' errors.';
-            toast(msg, 'success');
-            // Reload current page
-            setTimeout(function() { loadPage(state.currentPage); }, 400);
-        }, 90);
+        var chunks = [];
+        for (var i = 0; i < ids.length; i += DELETE_CHUNK_SIZE) {
+            chunks.push(ids.slice(i, i + DELETE_CHUNK_SIZE));
+        }
+
+        var chunkIndex = 0, totalDeleted = 0, allErrors = [];
+        showProgress('#delete-progress', '#delete-progress-inner', '#delete-progress-text', 0, 'Moving 0 of ' + ids.length + ' images to backup…');
+
+        function runNextChunk() {
+            if (chunkIndex >= chunks.length) {
+                hideProgress('#delete-progress');
+                $btns.prop('disabled', false);
+                state.selected = {};
+                var msg = '✅ Moved ' + totalDeleted + ' image(s) to backup.';
+                if (allErrors.length) msg += ' ⚠️ ' + allErrors.length + ' error(s).';
+                toast(msg, allErrors.length ? 'info' : 'success');
+                setTimeout(function() { loadPage(state.currentPage); }, 400);
+                return;
+            }
+
+            ajax('wpim_delete_batch', { ids: chunks[chunkIndex] }, function(err, data) {
+                if (err) {
+                    allErrors.push(err);
+                } else {
+                    totalDeleted += data.deleted;
+                    if (data.errors && data.errors.length) allErrors = allErrors.concat(data.errors);
+                }
+
+                chunkIndex++;
+                var doneCount = Math.min(chunkIndex * DELETE_CHUNK_SIZE, ids.length);
+                var pct = Math.round((chunkIndex / chunks.length) * 100);
+                showProgress('#delete-progress', '#delete-progress-inner', '#delete-progress-text', pct, 'Moving ' + doneCount + ' of ' + ids.length + ' images to backup… (' + pct + '%)');
+                runNextChunk();
+            }, 120);
+        }
+
+        runNextChunk();
     }
 
     // ─── Pagination ───────────────────────────────────────────────────

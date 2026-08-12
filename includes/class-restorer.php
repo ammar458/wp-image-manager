@@ -96,7 +96,8 @@ class WPIM_Restorer {
             $wpdb->insert( $wpdb->posts, $post_data );
         }
 
-        // Restore postmeta
+        // Restore postmeta (this includes the old, now-stale '_wp_attachment_metadata'
+        // snapshot — overwritten below once thumbnails are regenerated)
         $postmeta = $meta['postmeta'] ?? [];
         foreach ( $postmeta as $row ) {
             $exists = $wpdb->get_var( $wpdb->prepare(
@@ -108,6 +109,15 @@ class WPIM_Restorer {
             } else {
                 add_post_meta( $id, $row['meta_key'], maybe_unserialize( $row['meta_value'] ) );
             }
+        }
+
+        // Thumbnail sizes were never backed up — regenerate them from the
+        // restored main file now (also self-heals if registered image sizes
+        // changed since this attachment was deleted).
+        $main_file = $meta['file'] ?? null;
+        if ( $main_file && file_exists( $main_file ) ) {
+            $fresh_meta = wp_generate_attachment_metadata( $id, $main_file );
+            if ( $fresh_meta ) wp_update_attachment_metadata( $id, $fresh_meta );
         }
 
         // Clean up backup dir

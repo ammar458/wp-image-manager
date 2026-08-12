@@ -261,11 +261,12 @@
         doDelete(ids);
     });
 
-    // Deleting sends real work per image (a Google Drive upload per file when
-    // that destination is selected, not just a local move), so a big batch is
-    // sent as several smaller requests instead of one huge one — this avoids
-    // PHP/host/proxy timeouts and gives a progress bar real percentages to show.
-    var DELETE_CHUNK_SIZE = 10;
+    // Deleting sends real work per image (one Google Drive upload of the main
+    // file when that destination is selected, not just a local move), so a
+    // big batch is sent as several smaller requests instead of one huge one —
+    // this avoids PHP/host/proxy timeouts and gives a progress bar real
+    // percentages to show.
+    var DELETE_CHUNK_SIZE = 30;
 
     function doDelete(ids) {
         var $btns = $('#btn-delete-selected, #btn-delete-all-page');

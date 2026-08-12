@@ -26,6 +26,11 @@ class WPIM_Updater {
         add_filter( 'plugins_api', [ $this, 'plugin_info' ], 10, 3 );
         add_filter( 'upgrader_source_selection', [ $this, 'fix_source_dir' ], 10, 4 );
         add_action( 'upgrader_process_complete', [ $this, 'clear_cache' ], 10, 2 );
+        // WP's own "Check Again" button on Dashboard > Updates only clears WP's
+        // transient, not ours — without this, a forced recheck would still just
+        // hand back our stale 6-hour-old cached release info.
+        add_action( 'delete_site_transient_update_plugins', [ $this, 'clear_cache' ] );
+        add_action( 'admin_notices', [ $this, 'maybe_show_error_notice' ] );
     }
 
     private function get_release() {
@@ -37,15 +42,58 @@ class WPIM_Updater {
             [ 'headers' => [ 'Accept' => 'application/vnd.github+json' ] ]
         );
 
-        if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
+        if ( is_wp_error( $response ) ) {
+            $this->record_error( 'Could not reach GitHub: ' . $response->get_error_message() );
+            return false;
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( $code !== 200 ) {
+            $this->record_error( "GitHub returned HTTP {$code} while checking for updates." );
             return false;
         }
 
         $release = json_decode( wp_remote_retrieve_body( $response ) );
-        if ( empty( $release->tag_name ) ) return false;
+        if ( empty( $release->tag_name ) ) {
+            $this->record_error( 'GitHub release response was missing version info.' );
+            return false;
+        }
 
+        delete_option( 'wpim_updater_last_error' );
         set_transient( $this->cache_key, $release, 6 * HOUR_IN_SECONDS );
         return $release;
+    }
+
+    private function record_error( $message ) {
+        update_option( 'wpim_updater_last_error', [
+            'message' => $message,
+            'time'    => current_time( 'mysql' ),
+        ] );
+    }
+
+    /**
+     * Surface silent update-check failures (network/DNS/firewall issues
+     * reaching GitHub) instead of just showing no "Update Now" link with no
+     * explanation.
+     */
+    public function maybe_show_error_notice() {
+        if ( ! current_user_can( 'update_plugins' ) ) return;
+        $screen = get_current_screen();
+        if ( ! $screen || ! in_array( $screen->id, [ 'plugins', 'update-core' ], true ) ) return;
+
+        $error = get_option( 'wpim_updater_last_error' );
+        if ( ! $error ) return;
+
+        // Only surface it while it's still relevant — a stale error from days
+        // ago (since resolved and simply never re-checked) shouldn't nag forever.
+        if ( strtotime( $error['time'] ) < time() - DAY_IN_SECONDS ) return;
+
+        printf(
+            '<div class="notice notice-warning"><p><strong>WP Image Manager Pro:</strong> couldn\'t check for updates (last attempt %1$s) — %2$s This is why no update may be showing; it usually means the server can\'t reach GitHub. You can always <a href="%3$s" target="_blank" rel="noopener noreferrer">download the latest release directly</a> and install it via Plugins &rsaquo; Add New &rsaquo; Upload Plugin.</p></div>',
+            esc_html( $error['time'] ),
+            esc_html( $error['message'] ),
+            esc_url( "https://github.com/{$this->github_repo}/releases/latest" )
+        );
     }
 
     private function get_download_url( $release ) {
@@ -121,7 +169,17 @@ class WPIM_Updater {
         return $source;
     }
 
-    public function clear_cache( $upgrader, $data ) {
+    /**
+     * Hooked both to 'upgrader_process_complete' (2 args: $upgrader, $data
+     * array) and 'delete_site_transient_update_plugins' (1 arg: the transient
+     * name string). $data staying null distinguishes the latter — it always
+     * means "force a fresh check", so the cache is cleared unconditionally.
+     */
+    public function clear_cache( $upgrader = null, $data = null ) {
+        if ( $data === null ) {
+            delete_transient( $this->cache_key );
+            return;
+        }
         if ( ( $data['action'] ?? '' ) === 'update' && ( $data['type'] ?? '' ) === 'plugin' ) {
             delete_transient( $this->cache_key );
         }

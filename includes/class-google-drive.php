@@ -19,6 +19,19 @@ class WPIM_Google_Drive {
         return admin_url( 'admin-post.php?action=wpim_gdrive_oauth_callback' );
     }
 
+    /**
+     * Nudge the pending-upload queue to run as soon as possible without
+     * making the current request wait: schedule it, then trigger WP-Cron's
+     * own non-blocking loopback request immediately (the same mechanism core
+     * uses) instead of waiting for the next real pageview to tick cron.
+     */
+    public static function kick_off_queue() {
+        if ( ! wp_next_scheduled( 'wpim_gdrive_queue_tick' ) ) {
+            wp_schedule_single_event( time(), 'wpim_gdrive_queue_tick' );
+        }
+        if ( function_exists( 'spawn_cron' ) ) spawn_cron();
+    }
+
     public static function is_configured() {
         return (bool) get_option( 'wpim_gdrive_client_id' ) && (bool) get_option( 'wpim_gdrive_client_secret' );
     }

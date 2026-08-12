@@ -135,6 +135,7 @@
 .wpim-storage-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
 .wpim-storage-badge.local { background: var(--wpim-bg); color: #646970; border: 1px solid var(--wpim-border); }
 .wpim-storage-badge.gdrive { background: #e8f0fe; color: #1a73e8; }
+.wpim-storage-badge.pending { background: #fdf2d0; color: #8a6d00; }
 .wpim-storage-badge.mixed { background: #fdf2d0; color: #8a6d00; }
 
 /* Settings Panel */

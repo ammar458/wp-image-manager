@@ -87,12 +87,7 @@ class WPIM_Ajax {
 
     public function handle_delete_batch() {
         $this->verify();
-        // Google Drive uploads (main file + every thumbnail size, per image)
-        // are far slower than a local file move — give this real headroom.
-        if ( ! ini_get('safe_mode') ) {
-            @set_time_limit( 300 );
-            @ini_set( 'memory_limit', '256M' );
-        }
+        $this->set_limits();
         $ids = isset($_POST['ids']) ? array_map('intval', (array)$_POST['ids']) : [];
         if ( empty($ids) ) wp_send_json_error( 'No IDs provided.' );
         $deleter = new WPIM_Deleter();

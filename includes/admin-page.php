@@ -211,7 +211,7 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
                 </label>
                 <label class="wpim-radio-row">
                     <input type="radio" name="backup_destination" value="gdrive" <?php checked( $wpim_destination, 'gdrive' ); ?>>
-                    <span><strong>Google Drive</strong> — backups are uploaded straight to a "WP Image Manager Backups" folder in your connected Google Drive account, mirroring your uploads folder structure. No image files are kept on this server. If an upload fails, the delete or conversion is aborted (nothing is deleted or converted) rather than falling back to local storage.</span>
+                    <span><strong>Google Drive</strong> — backups are uploaded to a "WP Image Manager Backups" folder in your connected Google Drive account, mirroring your uploads folder structure. Deleted images are removed from WordPress right away and upload to Drive in the background, so nothing is lost if the upload is briefly delayed — the file only leaves this server once Drive confirms it arrived. Converting to WebP still waits on the upload: if it fails, the conversion is aborted (nothing is converted) rather than falling back to local storage.</span>
                 </label>
 
                 <h3>Google Drive OAuth App</h3>

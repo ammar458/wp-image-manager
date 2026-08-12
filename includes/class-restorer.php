@@ -51,7 +51,8 @@ class WPIM_Restorer {
         $drive_files   = $meta['drive_files'] ?? [];
 
         // Move files back (from local backup, or download from Google Drive)
-        $files = $meta['files'] ?? [];
+        $files  = $meta['files'] ?? [];
+        $failed = [];
         foreach ( $files as $original_path ) {
             $rel  = str_replace( $upload_dir['basedir'] . DIRECTORY_SEPARATOR, '', $original_path );
             $src  = $backup_id_dir . '/' . $rel;
@@ -60,10 +61,25 @@ class WPIM_Restorer {
                 wp_mkdir_p( dirname( $original_path ) );
                 rename( $src, $original_path );
             } elseif ( ! empty( $drive_files[ $rel ] ) ) {
+                wp_mkdir_p( dirname( $original_path ) );
                 if ( WPIM_Google_Drive::download_file( $drive_files[ $rel ], $original_path ) ) {
                     WPIM_Google_Drive::delete_file( $drive_files[ $rel ] );
+                } else {
+                    $failed[] = basename( $rel );
                 }
+            } else {
+                $failed[] = basename( $rel );
             }
+        }
+
+        // Don't restore a half-populated attachment: if any file couldn't be
+        // brought back (e.g. Drive download failed), leave the backup in place
+        // so the user can retry, instead of re-inserting a post with a missing file.
+        if ( ! empty( $failed ) ) {
+            return [
+                'success' => false,
+                'message' => 'Could not restore ' . count( $failed ) . ' file(s): ' . implode( ', ', $failed ) . '. The backup was left in place — please try again.',
+            ];
         }
 
         // Re-insert post

@@ -26,6 +26,9 @@ class WPIM_Deep_Scanner {
     /** @var array<string,int> same as $filename_map but lower-cased, for case-insensitive fallback matches */
     private $filename_map_lower = [];
 
+    /** @var array<string,int> lower-cased path relative to uploads dir (e.g. "2026/07/mobile.jpg") => attachment ID */
+    private $path_map = [];
+
     /** @var array<int,bool> set of valid image attachment IDs, for validating candidate IDs */
     private $valid_ids = [];
 
@@ -108,12 +111,16 @@ class WPIM_Deep_Scanner {
         foreach ( $rows as $row ) {
             $id = (int) $row->ID;
             $this->valid_ids[ $id ] = true;
-            $base = basename( parse_url( $row->guid, PHP_URL_PATH ) ?: $row->guid );
-            $this->add_filename( $base, $id );
+            $url_path = parse_url( $row->guid, PHP_URL_PATH ) ?: $row->guid;
+            $this->add_filename( basename( $url_path ), $id );
+            $this->index_path_from_uploads( $url_path, $id );
         }
 
         // Also index the real relative file (covers cases where guid and
-        // actual stored file differ, e.g. after moving uploads).
+        // actual stored file differ, e.g. after moving uploads). This is the
+        // authoritative source for the full relative path, since multiple
+        // attachments very commonly share the same basename across different
+        // year/month upload folders (e.g. two unrelated "banner.jpg" uploads).
         $attached = $wpdb->get_results( "
             SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_wp_attached_file'
         " );
@@ -121,6 +128,7 @@ class WPIM_Deep_Scanner {
             $id = (int) $row->post_id;
             if ( ! isset( $this->valid_ids[ $id ] ) ) continue;
             $this->add_filename( basename( $row->meta_value ), $id );
+            $this->index_path( $row->meta_value, $id );
         }
     }
 
@@ -143,6 +151,27 @@ class WPIM_Deep_Scanner {
         }
     }
 
+    /**
+     * Index by the path relative to the uploads directory (e.g. "2026/07/mobile.jpg"),
+     * which — unlike a bare basename — reliably distinguishes two different
+     * attachments that happen to share the same filename in different
+     * year/month upload folders.
+     */
+    private function index_path( $rel_path, $id ) {
+        $rel_path = ltrim( str_replace( '\\', '/', $rel_path ), '/' );
+        if ( ! $rel_path ) return;
+        $key = strtolower( $rel_path );
+        if ( ! isset( $this->path_map[ $key ] ) ) {
+            $this->path_map[ $key ] = $id;
+        }
+    }
+
+    private function index_path_from_uploads( $url_path, $id ) {
+        if ( preg_match( '#uploads/(.+)$#i', $url_path, $m ) ) {
+            $this->index_path( $m[1], $id );
+        }
+    }
+
     private function match_filename_in_string( $text ) {
         $matched = [];
         if ( ! is_string( $text ) || $text === '' ) return $matched;
@@ -159,15 +188,30 @@ class WPIM_Deep_Scanner {
         // filenames aren't silently skipped.
         if ( preg_match_all( '#[^\s"\'<>()]+\.(?:jpe?g|png|gif|webp)#i', $text, $m ) ) {
             foreach ( $m[0] as $path ) {
-                $base = basename( $path );
-                if ( isset( $this->filename_map[ $base ] ) ) {
-                    $matched[] = $this->filename_map[ $base ];
-                } else {
-                    $lower = strtolower( $base );
-                    if ( isset( $this->filename_map_lower[ $lower ] ) ) {
-                        $matched[] = $this->filename_map_lower[ $lower ];
+                // Prefer a full relative-path match (unambiguous) over a bare
+                // basename match, since many sites have multiple different
+                // attachments sharing the same filename in different folders.
+                $id = null;
+                if ( preg_match( '#uploads/(.+)$#i', $path, $pm ) ) {
+                    $key = strtolower( ltrim( str_replace( '\\', '/', $pm[1] ), '/' ) );
+                    if ( isset( $this->path_map[ $key ] ) ) {
+                        $id = $this->path_map[ $key ];
                     }
                 }
+
+                if ( $id === null ) {
+                    $base = basename( $path );
+                    if ( isset( $this->filename_map[ $base ] ) ) {
+                        $id = $this->filename_map[ $base ];
+                    } else {
+                        $lower = strtolower( $base );
+                        if ( isset( $this->filename_map_lower[ $lower ] ) ) {
+                            $id = $this->filename_map_lower[ $lower ];
+                        }
+                    }
+                }
+
+                if ( $id !== null ) $matched[] = $id;
             }
         }
         return $matched;

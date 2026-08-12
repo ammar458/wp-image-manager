@@ -197,11 +197,13 @@ class WPIM_Deep_Scanner {
     }
 
     /**
-     * 1. AdRotate: images are mainly stored as a path/URL in the 'image' column,
-     *    but banner HTML/JS ads (bannercode) and responsive/Pro variants can
-     *    embed extra <img>/background-image references or a serialized array
-     *    of per-device image paths. Schema also varies across free/Pro
-     *    versions, so columns are detected rather than hard-coded.
+     * 1. AdRotate: the AdCode field usually just contains a "%asset%" placeholder
+     *    tag (not a real path) — the actual image lives in the "Banner asset"
+     *    picker, saved to the 'image' column either as a WP media URL/path or,
+     *    on some installs, as a bare WP attachment ID. Pro/responsive variants
+     *    can also store a serialized array of per-device image paths. Schema
+     *    varies across free/Pro versions, so columns are detected rather than
+     *    hard-coded.
      */
     private function scan_adrotate() {
         global $wpdb;
@@ -216,30 +218,15 @@ class WPIM_Deep_Scanner {
             [ 'image', 'bannercode', 'thumbnail', 'desktop_image', 'mobile_image', 'tablet_image', 'mobile_tablet_image' ],
             $known_columns
         );
-        if ( empty( $image_columns ) ) return 0;
+        if ( ! empty( $image_columns ) ) {
+            $select = implode( ', ', array_map( function ( $c ) { return "`{$c}`"; }, $image_columns ) );
+            $rows   = $wpdb->get_results( "SELECT {$select} FROM `{$table}`", ARRAY_A );
 
-        $select = implode( ', ', array_map( function ( $c ) { return "`{$c}`"; }, $image_columns ) );
-        $rows   = $wpdb->get_results( "SELECT {$select} FROM `{$table}`", ARRAY_A );
-
-        foreach ( $rows as $row ) {
-            foreach ( $row as $val ) {
-                if ( ! is_string( $val ) || $val === '' ) continue;
-
-                // Pro/responsive versions can store a serialized array of per-size image paths.
-                if ( strpos( $val, 'a:' ) === 0 ) {
-                    $decoded = @unserialize( $val, [ 'allowed_classes' => false ] );
-                    if ( $decoded !== false ) {
-                        $found = [];
-                        $this->walk_value( $decoded, $found );
-                        foreach ( array_unique( $found ) as $id ) {
-                            if ( $this->insert_id( $id, 'adrotate' ) ) $count++;
-                        }
-                        continue;
+            foreach ( $rows as $row ) {
+                foreach ( $row as $val ) {
+                    foreach ( $this->extract_ids_from_value( $val ) as $id ) {
+                        if ( $this->insert_id( $id, 'adrotate' ) ) $count++;
                     }
-                }
-
-                foreach ( $this->match_filename_in_string( $val ) as $id ) {
-                    if ( $this->insert_id( $id, 'adrotate' ) ) $count++;
                 }
             }
         }
@@ -254,8 +241,7 @@ class WPIM_Deep_Scanner {
                 $c_rows   = $wpdb->get_results( "SELECT {$c_select} FROM `{$creatives_table}`", ARRAY_A );
                 foreach ( $c_rows as $row ) {
                     foreach ( $row as $val ) {
-                        if ( ! is_string( $val ) || $val === '' ) continue;
-                        foreach ( $this->match_filename_in_string( $val ) as $id ) {
+                        foreach ( $this->extract_ids_from_value( $val ) as $id ) {
                             if ( $this->insert_id( $id, 'adrotate' ) ) $count++;
                         }
                     }
@@ -264,6 +250,32 @@ class WPIM_Deep_Scanner {
         }
 
         return $count;
+    }
+
+    /**
+     * Resolve a single stored value (from a DB column) to candidate attachment
+     * IDs, whether it's a bare numeric ID, a serialized array of paths/IDs, or
+     * a plain path/URL string.
+     */
+    private function extract_ids_from_value( $val ) {
+        if ( ! is_string( $val ) || $val === '' ) return [];
+
+        // Some installs store the WP attachment ID directly instead of a path.
+        if ( preg_match( '/^[0-9]{1,10}$/', trim( $val ) ) ) {
+            return [ (int) trim( $val ) ];
+        }
+
+        // Pro/responsive versions can store a serialized array of per-size image paths/IDs.
+        if ( strpos( $val, 'a:' ) === 0 ) {
+            $decoded = @unserialize( $val, [ 'allowed_classes' => false ] );
+            if ( $decoded !== false ) {
+                $found = [];
+                $this->walk_value( $decoded, $found );
+                return array_unique( $found );
+            }
+        }
+
+        return $this->match_filename_in_string( $val );
     }
 
     /**

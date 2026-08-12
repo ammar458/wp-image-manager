@@ -359,8 +359,10 @@
 
     // ─── Restore Deleted ──────────────────────────────────────────────
     $('#btn-load-deleted').on('click', function() { loadDeletedList(1); });
+    $(document).on('click', '#btn-deleted-first', function() { loadDeletedList(1); });
     $(document).on('click', '#btn-deleted-prev', function() { loadDeletedList(--state.deletedPage); });
     $(document).on('click', '#btn-deleted-next', function() { loadDeletedList(++state.deletedPage); });
+    $(document).on('click', '#btn-deleted-last', function() { loadDeletedList(state.deletedTotalPages); });
 
     function loadDeletedList(page) {
         state.deletedPage = page;
@@ -388,7 +390,7 @@
                       + '</div>';
             });
             $('#deleted-list').html(html);
-            renderRestorePagination('#deleted-pagination', '#deleted-page-info', '#btn-deleted-prev', '#btn-deleted-next', page, state.deletedTotalPages);
+            renderRestorePagination('#deleted-pagination', '#deleted-page-info', '#btn-deleted-first', '#btn-deleted-prev', '#btn-deleted-next', '#btn-deleted-last', page, state.deletedTotalPages);
         });
     }
 
@@ -405,8 +407,10 @@
 
     // ─── Restore Converted ────────────────────────────────────────────
     $('#btn-load-converted').on('click', function() { loadConvertedList(1); });
+    $(document).on('click', '#btn-converted-first', function() { loadConvertedList(1); });
     $(document).on('click', '#btn-converted-prev', function() { loadConvertedList(--state.convertedPage); });
     $(document).on('click', '#btn-converted-next', function() { loadConvertedList(++state.convertedPage); });
+    $(document).on('click', '#btn-converted-last', function() { loadConvertedList(state.convertedTotalPages); });
 
     function loadConvertedList(page) {
         state.convertedPage = page;
@@ -435,7 +439,7 @@
                       + '</div>';
             });
             $('#converted-list').html(html);
-            renderRestorePagination('#converted-pagination', '#converted-page-info', '#btn-converted-prev', '#btn-converted-next', page, state.convertedTotalPages);
+            renderRestorePagination('#converted-pagination', '#converted-page-info', '#btn-converted-first', '#btn-converted-prev', '#btn-converted-next', '#btn-converted-last', page, state.convertedTotalPages);
         });
     }
 
@@ -452,12 +456,14 @@
     });
 
     // ─── Helpers ──────────────────────────────────────────────────────
-    function renderRestorePagination(pag, info, prev, next, page, total) {
+    function renderRestorePagination(pag, info, first, prev, next, last, page, total) {
         if (total <= 1) { $(pag).hide(); return; }
         $(pag).show();
         $(info).text('Page ' + page + ' of ' + total);
+        $(first).prop('disabled', page <= 1);
         $(prev).prop('disabled', page <= 1);
         $(next).prop('disabled', page >= total);
+        $(last).prop('disabled', page >= total);
     }
 
     function escHtml(str) {

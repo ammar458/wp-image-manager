@@ -6,7 +6,7 @@ class WPIM_Restorer {
     /**
      * Get list of deleted image backups.
      */
-    public function get_deleted_backups( $page = 1, $per_page = 50 ) {
+    public function get_deleted_backups( $page = 1, $per_page = 100 ) {
         $backup_dir = WPIM_BACKUP_DELETED;
         if ( ! is_dir( $backup_dir ) ) return [ 'items' => [], 'total' => 0 ];
 
@@ -29,6 +29,7 @@ class WPIM_Restorer {
                 'deleted_at' => $meta['deleted_at'] ?? '',
                 'backup_dir' => dirname( $meta_file ),
                 'storage'    => $meta['storage'] ?? 'local',
+                'thumb'      => $meta['thumb'] ?? '',
             ];
         }
 
@@ -170,7 +171,7 @@ class WPIM_Restorer {
     /**
      * Get list of converted image backups.
      */
-    public function get_converted_backups( $page = 1, $per_page = 50 ) {
+    public function get_converted_backups( $page = 1, $per_page = 100 ) {
         global $wpdb;
         $offset = ( $page - 1 ) * $per_page;
         $rows = $wpdb->get_results( $wpdb->prepare("
@@ -201,6 +202,7 @@ class WPIM_Restorer {
                 'converted_at' => $info['converted_at'] ?? '',
                 'storage'      => $storage,
                 'backup_exists'=> $backup_exists,
+                'thumb'        => $info['thumb'] ?? '',
             ];
         }
 

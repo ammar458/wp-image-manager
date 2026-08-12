@@ -38,7 +38,7 @@ class WPIM_Scanner {
     /**
      * Get a paginated list of unattached image IDs with metadata.
      */
-    public function get_unattached_page( $page = 1, $per_page = 50 ) {
+    public function get_unattached_page( $page = 1, $per_page = 100 ) {
         global $wpdb;
 
         $this->maybe_build_attached_temp_table();

@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Image Manager Pro
  * Description: Detect & delete unattached images, auto-convert uploads to WebP, backup & restore.
- * Version: 1.3.3
+ * Version: 1.4.0
  * Author: Ringomedia
  * Text Domain: wp-image-manager
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WPIM_VERSION', '1.3.3' );
+define( 'WPIM_VERSION', '1.4.0' );
 define( 'WPIM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPIM_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPIM_GITHUB_REPO', 'ammar458/wp-image-manager' );
@@ -92,4 +92,56 @@ function wpim_convert_on_upload( $upload, $context ) {
 
 function wpim_render_page() {
     include WPIM_DIR . 'includes/admin-page.php';
+}
+
+/**
+ * Generate a small preview thumbnail as an inline base64 data URI, so restore
+ * lists can show a real image regardless of whether the backup itself lives
+ * locally or on Google Drive (neither of which is safe/simple to hotlink —
+ * the local folder is .htaccess-protected, and Drive files aren't public).
+ */
+function wpim_generate_thumb_data_uri( $path, $max = 150 ) {
+    if ( ! file_exists( $path ) || ! function_exists( 'imagecreatetruecolor' ) ) return '';
+
+    $info = @getimagesize( $path );
+    if ( ! $info ) return '';
+
+    switch ( $info['mime'] ) {
+        case 'image/jpeg':
+            $src = @imagecreatefromjpeg( $path );
+            break;
+        case 'image/png':
+            $src = @imagecreatefrompng( $path );
+            break;
+        case 'image/webp':
+            $src = function_exists( 'imagecreatefromwebp' ) ? @imagecreatefromwebp( $path ) : false;
+            break;
+        case 'image/gif':
+            $src = @imagecreatefromgif( $path );
+            break;
+        default:
+            return '';
+    }
+    if ( ! $src ) return '';
+
+    $w = imagesx( $src );
+    $h = imagesy( $src );
+    $ratio = min( $max / $w, $max / $h, 1 );
+    $nw = max( 1, (int) round( $w * $ratio ) );
+    $nh = max( 1, (int) round( $h * $ratio ) );
+
+    $thumb = imagecreatetruecolor( $nw, $nh );
+    imagealphablending( $thumb, false );
+    imagesavealpha( $thumb, true );
+    imagecopyresampled( $thumb, $src, 0, 0, 0, 0, $nw, $nh, $w, $h );
+
+    ob_start();
+    imagejpeg( $thumb, null, 70 );
+    $data = ob_get_clean();
+
+    imagedestroy( $src );
+    imagedestroy( $thumb );
+
+    if ( ! $data ) return '';
+    return 'data:image/jpeg;base64,' . base64_encode( $data );
 }

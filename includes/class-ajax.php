@@ -78,7 +78,7 @@ class WPIM_Ajax {
         try {
             // Build temp table if not already built this request
             $scanner->maybe_build_attached_temp_table();
-            $data = $scanner->get_unattached_page( $page, 50 );
+            $data = $scanner->get_unattached_page( $page, 100 );
             wp_send_json_success( $data );
         } catch ( Exception $e ) {
             wp_send_json_error( 'Page load error: ' . $e->getMessage() );
@@ -99,7 +99,7 @@ class WPIM_Ajax {
         $this->set_limits();
         $offset    = intval( $_POST['offset'] ?? 0 );
         $converter = new WPIM_Converter();
-        $result    = $converter->bulk_convert( 50, $offset );
+        $result    = $converter->bulk_convert( 100, $offset );
         wp_send_json_success( $result );
     }
 
@@ -107,7 +107,7 @@ class WPIM_Ajax {
         $this->verify();
         $page     = intval( $_POST['page'] ?? 1 );
         $restorer = new WPIM_Restorer();
-        $data     = $restorer->get_converted_backups( $page, 50 );
+        $data     = $restorer->get_converted_backups( $page, 100 );
         wp_send_json_success( $data );
     }
 
@@ -115,7 +115,7 @@ class WPIM_Ajax {
         $this->verify();
         $page     = intval( $_POST['page'] ?? 1 );
         $restorer = new WPIM_Restorer();
-        $data     = $restorer->get_deleted_backups( $page, 50 );
+        $data     = $restorer->get_deleted_backups( $page, 100 );
         wp_send_json_success( $data );
     }
 

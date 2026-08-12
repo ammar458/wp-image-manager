@@ -127,9 +127,9 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
 
             <div class="wpim-convert-actions">
                 <button class="wpim-btn wpim-btn-primary" id="btn-bulk-convert">
-                    🔄 Convert 50 Images to WebP
+                    🔄 Convert 100 Images to WebP
                 </button>
-                <span class="wpim-convert-note">Originals are backed up before conversion. 50 at a time for performance.</span>
+                <span class="wpim-convert-note">Originals are backed up before conversion. 100 at a time for performance.</span>
             </div>
 
             <div class="wpim-progress-bar" id="convert-progress" style="display:none">
@@ -211,7 +211,7 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
                 </label>
                 <label class="wpim-radio-row">
                     <input type="radio" name="backup_destination" value="gdrive" <?php checked( $wpim_destination, 'gdrive' ); ?>>
-                    <span><strong>Google Drive</strong> — backups are uploaded to a "WP Image Manager Backups" folder in your connected Google Drive account. Falls back to local storage automatically if an upload fails.</span>
+                    <span><strong>Google Drive</strong> — backups are uploaded straight to a "WP Image Manager Backups" folder in your connected Google Drive account, mirroring your uploads folder structure. No image files are kept on this server. If an upload fails, the delete or conversion is aborted (nothing is deleted or converted) rather than falling back to local storage.</span>
                 </label>
 
                 <h3>Google Drive OAuth App</h3>

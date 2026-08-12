@@ -128,7 +128,13 @@ class WPIM_Google_Drive {
         return $body['access_token'];
     }
 
+    /** @var array<string,string> "{parent}/{name}" => folder ID, cached for the lifetime of the request */
+    private static $folder_cache = [];
+
     private static function find_or_create_folder( $name, $parent_id = null ) {
+        $cache_key = ( $parent_id ?: 'root' ) . '/' . $name;
+        if ( isset( self::$folder_cache[ $cache_key ] ) ) return self::$folder_cache[ $cache_key ];
+
         $token = self::get_access_token();
         if ( ! $token ) return false;
 
@@ -139,7 +145,9 @@ class WPIM_Google_Drive {
         $resp = wp_remote_get( $url, [ 'headers' => [ 'Authorization' => 'Bearer ' . $token ] ] );
         if ( ! is_wp_error( $resp ) ) {
             $data = json_decode( wp_remote_retrieve_body( $resp ), true );
-            if ( ! empty( $data['files'][0]['id'] ) ) return $data['files'][0]['id'];
+            if ( ! empty( $data['files'][0]['id'] ) ) {
+                return self::$folder_cache[ $cache_key ] = $data['files'][0]['id'];
+            }
         }
 
         $meta = [ 'name' => $name, 'mimeType' => 'application/vnd.google-apps.folder' ];
@@ -152,7 +160,27 @@ class WPIM_Google_Drive {
         if ( is_wp_error( $resp ) ) return false;
 
         $data = json_decode( wp_remote_retrieve_body( $resp ), true );
-        return $data['id'] ?? false;
+        if ( empty( $data['id'] ) ) return false;
+
+        return self::$folder_cache[ $cache_key ] = $data['id'];
+    }
+
+    /**
+     * Walk (creating as needed) a nested folder path such as "2026/07" under
+     * a parent folder, returning the final folder's ID. Segments are cached
+     * per-request so many files sharing the same folder don't re-hit the API.
+     */
+    public static function get_nested_folder_id( $parent_id, $relative_dir ) {
+        $relative_dir = trim( str_replace( '\\', '/', $relative_dir ), '/' );
+        if ( $relative_dir === '' || $relative_dir === '.' ) return $parent_id;
+
+        $current = $parent_id;
+        foreach ( explode( '/', $relative_dir ) as $segment ) {
+            if ( $segment === '' ) continue;
+            $current = self::find_or_create_folder( $segment, $current );
+            if ( ! $current ) return false;
+        }
+        return $current;
     }
 
     /**

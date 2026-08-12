@@ -120,12 +120,16 @@
 .wpim-restore-header { margin-bottom: 20px; }
 .wpim-restore-header h2 { margin: 0 0 6px; font-size: 18px; }
 .wpim-restore-header p { color: #646970; margin: 0 0 14px; }
-.wpim-restore-list { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
-.wpim-restore-item { display: flex; align-items: center; gap: 14px; background: var(--wpim-bg); border-radius: 6px; padding: 12px 16px; border: 1px solid var(--wpim-border); }
-.wpim-restore-item-info { flex: 1; }
+.wpim-restore-list { display: flex; flex-direction: column; gap: 10px; min-height: 100px; }
+.wpim-restore-item { display: flex; align-items: center; gap: 14px; background: var(--wpim-card-bg); border-radius: 8px; padding: 10px 16px; border: 1px solid var(--wpim-border); box-shadow: var(--wpim-shadow); transition: box-shadow .15s, border-color .15s; }
+.wpim-restore-item:hover { border-color: var(--wpim-primary); box-shadow: 0 2px 10px rgba(34,113,177,.12); }
+.wpim-restore-item-info { flex: 1; min-width: 0; }
 .wpim-restore-item-title { font-weight: 600; font-size: 13px; }
-.wpim-restore-item-meta { font-size: 11px; color: #646970; margin-top: 2px; }
+.wpim-restore-item-meta { font-size: 11px; color: #646970; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wpim-placeholder-sm { color: #646970; text-align: center; padding: 30px; }
+
+.wpim-restore-thumb { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; display: block; flex-shrink: 0; background: #ddd; }
+.wpim-restore-thumb-placeholder { display: flex; align-items: center; justify-content: center; font-size: 22px; background: #eee; }
 
 /* Storage badge */
 .wpim-storage-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }

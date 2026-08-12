@@ -307,10 +307,10 @@
 
         ajax('wpim_bulk_convert', { offset: state.convertOffset }, function(err, data) {
             hideProgress('#convert-progress');
-            $btn.prop('disabled', false).text('🔄 Convert Next 50 to WebP');
+            $btn.prop('disabled', false).text('🔄 Convert Next 100 to WebP');
             if (err) { toast('Conversion error: ' + err, 'error'); return; }
 
-            state.convertOffset += 50;
+            state.convertOffset += 100;
             var msg = '✅ Converted: <strong>' + data.converted + '</strong>  |  Skipped: ' + data.skipped;
             if (data.remaining !== undefined) msg += '  |  Remaining JPEG/PNG: <strong>' + data.remaining + '</strong>';
             if (data.errors && data.errors.length) msg += '<br>⚠️ ' + data.errors.slice(0,3).join(', ');
@@ -345,11 +345,15 @@
             var html = '';
             $.each(data.items, function(i, item) {
                 html += '<div class="wpim-restore-item">'
-                      + '<div class="wpim-restore-item-info">'
-                      +   '<div class="wpim-restore-item-title">' + escHtml(item.title || 'Untitled') + storageBadge(item.storage) + '</div>'
-                      +   '<div class="wpim-restore-item-meta">ID: ' + item.id + ' &nbsp;·&nbsp; ' + escHtml(item.filename) + ' &nbsp;·&nbsp; Deleted: ' + item.deleted_at + '</div>'
-                      + '</div>'
-                      + '<button class="wpim-btn wpim-btn-success wpim-btn-sm btn-restore-deleted" data-id="' + item.id + '">♻️ Restore</button>'
+                      +   restoreThumb(item.thumb)
+                      +   '<div class="wpim-restore-item-info">'
+                      +     '<div class="wpim-restore-item-title">' + escHtml(item.title || 'Untitled') + storageBadge(item.storage) + '</div>'
+                      +     '<div class="wpim-restore-item-meta">ID: ' + item.id + ' &nbsp;·&nbsp; ' + escHtml(item.filename) + ' &nbsp;·&nbsp; Deleted: ' + item.deleted_at + '</div>'
+                      +   '</div>'
+                      +   '<button class="wpim-btn wpim-btn-success wpim-btn-sm btn-restore-deleted" data-id="' + item.id + '">'
+                      +     '<span class="wpim-spinner-inline wpim-btn-spinner" style="display:none"></span>'
+                      +     '<span class="wpim-btn-label">♻️ Restore</span>'
+                      +   '</button>'
                       + '</div>';
             });
             $('#deleted-list').html(html);
@@ -360,9 +364,9 @@
     $(document).on('click', '.btn-restore-deleted', function() {
         var id = $(this).data('id'), $btn = $(this);
         if (!confirm('Restore attachment #' + id + ' back to WordPress?')) return;
-        $btn.prop('disabled', true).text('Restoring…');
+        setBtnBusy($btn, true, 'Restoring…');
         ajax('wpim_restore_deleted', { attachment_id: id }, function(err) {
-            if (err) { toast('Restore error: ' + err, 'error'); $btn.prop('disabled', false).text('♻️ Restore'); return; }
+            if (err) { toast('Restore error: ' + err, 'error'); setBtnBusy($btn, false, '♻️ Restore'); return; }
             toast('✅ Attachment #' + id + ' restored!', 'success');
             $btn.closest('.wpim-restore-item').fadeOut(300, function() { $(this).remove(); });
         });
@@ -388,11 +392,15 @@
             $.each(data.items, function(i, item) {
                 var warn = item.backup_exists ? '' : ' <em style="color:#d63638">(backup file missing)</em>';
                 html += '<div class="wpim-restore-item">'
-                      + '<div class="wpim-restore-item-info">'
-                      +   '<div class="wpim-restore-item-title">' + escHtml(item.title) + storageBadge(item.storage) + warn + '</div>'
-                      +   '<div class="wpim-restore-item-meta">ID: ' + item.id + ' &nbsp;·&nbsp; ' + escHtml(item.original) + ' → ' + escHtml(item.webp) + ' &nbsp;·&nbsp; ' + item.converted_at + '</div>'
-                      + '</div>'
-                      + '<button class="wpim-btn wpim-btn-sm btn-revert-converted" data-id="' + item.id + '"' + (item.backup_exists ? '' : ' disabled') + '>↩️ Revert</button>'
+                      +   restoreThumb(item.thumb)
+                      +   '<div class="wpim-restore-item-info">'
+                      +     '<div class="wpim-restore-item-title">' + escHtml(item.title) + storageBadge(item.storage) + warn + '</div>'
+                      +     '<div class="wpim-restore-item-meta">ID: ' + item.id + ' &nbsp;·&nbsp; ' + escHtml(item.original) + ' → ' + escHtml(item.webp) + ' &nbsp;·&nbsp; ' + item.converted_at + '</div>'
+                      +   '</div>'
+                      +   '<button class="wpim-btn wpim-btn-primary wpim-btn-sm btn-revert-converted" data-id="' + item.id + '"' + (item.backup_exists ? '' : ' disabled') + '>'
+                      +     '<span class="wpim-spinner-inline wpim-btn-spinner" style="display:none"></span>'
+                      +     '<span class="wpim-btn-label">↩️ Revert</span>'
+                      +   '</button>'
                       + '</div>';
             });
             $('#converted-list').html(html);
@@ -403,9 +411,9 @@
     $(document).on('click', '.btn-revert-converted', function() {
         var id = $(this).data('id'), $btn = $(this);
         if (!confirm('Revert attachment #' + id + ' from WebP back to original JPEG/PNG?')) return;
-        $btn.prop('disabled', true).text('Reverting…');
+        setBtnBusy($btn, true, 'Reverting…');
         ajax('wpim_restore_converted', { attachment_id: id }, function(err) {
-            if (err) { toast('Revert error: ' + err, 'error'); $btn.prop('disabled', false).text('↩️ Revert'); return; }
+            if (err) { toast('Revert error: ' + err, 'error'); setBtnBusy($btn, false, '↩️ Revert'); return; }
             toast('✅ Attachment #' + id + ' reverted!', 'success');
             $btn.closest('.wpim-restore-item').fadeOut(300, function() { $(this).remove(); });
             loadConversionStats();
@@ -429,6 +437,18 @@
         if (!storage || storage === 'local') return ' <span class="wpim-storage-badge local">Local</span>';
         if (storage === 'gdrive') return ' <span class="wpim-storage-badge gdrive">Google Drive</span>';
         return ' <span class="wpim-storage-badge mixed">Mixed</span>';
+    }
+
+    function restoreThumb(thumb) {
+        return thumb
+            ? '<img class="wpim-restore-thumb" src="' + escHtml(thumb) + '" alt="" loading="lazy">'
+            : '<div class="wpim-restore-thumb wpim-restore-thumb-placeholder">🖼️</div>';
+    }
+
+    function setBtnBusy($btn, busy, label) {
+        $btn.prop('disabled', busy);
+        $btn.find('.wpim-btn-spinner').toggle(busy);
+        $btn.find('.wpim-btn-label').text(label);
     }
 
     // ─── Init ─────────────────────────────────────────────────────────

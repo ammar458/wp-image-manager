@@ -1,0 +1,139 @@
+/* WP Image Manager Pro Styles */
+:root {
+    --wpim-primary: #2271b1;
+    --wpim-danger: #d63638;
+    --wpim-success: #00a32a;
+    --wpim-warning: #dba617;
+    --wpim-bg: #f0f0f1;
+    --wpim-card-bg: #fff;
+    --wpim-border: #c3c4c7;
+    --wpim-radius: 8px;
+    --wpim-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
+.wpim-wrap * { box-sizing: border-box; }
+.wpim-wrap { max-width: 1400px; padding: 0 0 40px; }
+
+/* Header */
+.wpim-header { background: linear-gradient(135deg, #1d2327 0%, #2271b1 100%); border-radius: var(--wpim-radius); padding: 20px 28px; margin-bottom: 20px; }
+.wpim-header-inner { display: flex; align-items: center; gap: 12px; }
+.wpim-header h1 { color: #fff; margin: 0; font-size: 22px; font-weight: 700; }
+.wpim-version { background: rgba(255,255,255,.2); color: #fff; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
+
+/* Stats Bar */
+.wpim-stats-bar { display: flex; align-items: center; gap: 12px; background: var(--wpim-card-bg); border-radius: var(--wpim-radius); padding: 16px 20px; margin-bottom: 20px; box-shadow: var(--wpim-shadow); flex-wrap: wrap; }
+.wpim-stat-card { flex: 1; min-width: 100px; text-align: center; padding: 10px 8px; border-radius: 6px; background: var(--wpim-bg); }
+.wpim-stat-num { display: block; font-size: 28px; font-weight: 700; line-height: 1; }
+.wpim-stat-label { display: block; font-size: 11px; color: #646970; margin-top: 4px; font-weight: 500; }
+.wpim-stat-total .wpim-stat-num { color: #1d2327; }
+.wpim-stat-attached .wpim-stat-num { color: var(--wpim-success); }
+.wpim-stat-unattached .wpim-stat-num { color: var(--wpim-danger); }
+.wpim-stat-webp .wpim-stat-num { color: var(--wpim-primary); }
+.wpim-stat-jpeg .wpim-stat-num { color: var(--wpim-warning); }
+
+/* Buttons */
+.wpim-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .15s; text-decoration: none; }
+.wpim-btn:disabled { opacity: .5; cursor: not-allowed; }
+.wpim-btn-scan { background: var(--wpim-primary); color: #fff; padding: 10px 20px; }
+.wpim-btn-scan:hover:not(:disabled) { background: #135e96; }
+.wpim-btn-scan:first-of-type { margin-left: auto; }
+.wpim-btn-scan.wpim-btn-outline { background: transparent; border: 2px solid var(--wpim-primary); color: var(--wpim-primary); }
+.wpim-btn-scan.wpim-btn-outline:hover:not(:disabled) { background: var(--wpim-primary); color: #fff; }
+.wpim-btn-scan:disabled { opacity: .5; cursor: not-allowed; }
+.wpim-deep-scan-note { font-size: 12.5px; color: #666; margin: -10px 0 16px; line-height: 1.5; }
+.wpim-btn-primary { background: var(--wpim-primary); color: #fff; }
+.wpim-btn-primary:hover:not(:disabled) { background: #135e96; }
+.wpim-btn-danger { background: var(--wpim-danger); color: #fff; }
+.wpim-btn-danger:hover:not(:disabled) { background: #b32d2e; }
+.wpim-btn-danger.wpim-btn-outline { background: transparent; border: 2px solid var(--wpim-danger); color: var(--wpim-danger); }
+.wpim-btn-danger.wpim-btn-outline:hover:not(:disabled) { background: var(--wpim-danger); color: #fff; }
+.wpim-btn-success { background: var(--wpim-success); color: #fff; }
+.wpim-btn-success:hover:not(:disabled) { background: #007a1f; }
+.wpim-btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* Tabs */
+.wpim-tabs { display: flex; gap: 4px; margin-bottom: 0; border-bottom: 2px solid var(--wpim-border); padding: 0 4px; }
+.wpim-tab { background: none; border: none; padding: 10px 18px; font-size: 13px; font-weight: 600; color: #646970; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; border-radius: 4px 4px 0 0; transition: all .15s; }
+.wpim-tab:hover { color: var(--wpim-primary); background: rgba(34,113,177,.06); }
+.wpim-tab.active { color: var(--wpim-primary); border-bottom-color: var(--wpim-primary); background: var(--wpim-card-bg); }
+
+/* Tab content */
+.wpim-tab-content { display: none; background: var(--wpim-card-bg); border-radius: 0 0 var(--wpim-radius) var(--wpim-radius); padding: 24px; box-shadow: var(--wpim-shadow); }
+.wpim-tab-content.active { display: block; }
+
+/* Toolbar */
+.wpim-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.wpim-toolbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+.wpim-check-all-label { display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+.wpim-selected-count { background: var(--wpim-primary); color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+/* Images Grid */
+.wpim-images-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; min-height: 200px; }
+.wpim-placeholder { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: #646970; }
+.wpim-placeholder p { font-size: 15px; }
+
+.wpim-image-card { position: relative; border-radius: 8px; border: 2px solid var(--wpim-border); overflow: hidden; background: var(--wpim-bg); cursor: pointer; transition: all .15s; }
+.wpim-image-card:hover { border-color: var(--wpim-primary); box-shadow: 0 0 0 3px rgba(34,113,177,.15); }
+.wpim-image-card.selected { border-color: var(--wpim-primary); background: rgba(34,113,177,.06); }
+.wpim-image-card.selected::after { content: '✓'; position: absolute; top: 6px; right: 6px; background: var(--wpim-primary); color: #fff; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+
+.wpim-card-thumb { width: 100%; height: 140px; object-fit: cover; display: block; background: #ddd; }
+.wpim-card-thumb-placeholder { width: 100%; height: 140px; display: flex; align-items: center; justify-content: center; font-size: 40px; background: #eee; }
+.wpim-card-info { padding: 8px; }
+.wpim-card-name { font-size: 11px; font-weight: 600; color: #1d2327; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wpim-card-meta { font-size: 10px; color: #646970; margin-top: 2px; display: flex; justify-content: space-between; }
+.wpim-card-check { position: absolute; top: 6px; left: 6px; width: 18px; height: 18px; accent-color: var(--wpim-primary); }
+.wpim-card-badge { position: absolute; bottom: 44px; left: 0; right: 0; background: rgba(0,0,0,.5); color: #fff; font-size: 10px; text-align: center; padding: 2px 4px; }
+
+/* Progress bar */
+.wpim-progress-bar { background: var(--wpim-bg); border-radius: 20px; height: 28px; margin: 12px 0; position: relative; overflow: hidden; border: 1px solid var(--wpim-border); }
+.wpim-progress-inner { height: 100%; background: linear-gradient(90deg, var(--wpim-primary), #56a8f5); border-radius: 20px; transition: width .3s; width: 0%; }
+.wpim-progress-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #1d2327; }
+
+/* Pagination */
+.wpim-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 20px; }
+#page-info, #deleted-page-info, #converted-page-info { font-size: 13px; font-weight: 600; color: #646970; }
+
+/* Convert Panel */
+.wpim-convert-panel { max-width: 700px; }
+.wpim-convert-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.wpim-convert-header h2 { margin: 0; font-size: 18px; }
+.wpim-toggle-row { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
+.wpim-toggle { position: relative; display: inline-block; width: 46px; height: 24px; }
+.wpim-toggle input { opacity: 0; width: 0; height: 0; }
+.wpim-toggle-slider { position: absolute; inset: 0; background: var(--wpim-border); border-radius: 24px; cursor: pointer; transition: .3s; }
+.wpim-toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; }
+.wpim-toggle input:checked + .wpim-toggle-slider { background: var(--wpim-success); }
+.wpim-toggle input:checked + .wpim-toggle-slider::before { transform: translateX(22px); }
+
+.wpim-convert-stats { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.wpim-cstat { background: var(--wpim-bg); border-radius: 8px; padding: 14px 18px; text-align: center; flex: 1; min-width: 120px; }
+.wpim-cstat span { display: block; font-size: 26px; font-weight: 700; color: var(--wpim-primary); }
+.wpim-cstat small { color: #646970; font-size: 11px; }
+.wpim-convert-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+.wpim-convert-note { font-size: 12px; color: #646970; font-style: italic; }
+.wpim-result-box { background: var(--wpim-bg); border-radius: 6px; padding: 14px; border-left: 4px solid var(--wpim-success); font-size: 13px; margin-top: 12px; }
+.wpim-result-box.error { border-left-color: var(--wpim-danger); }
+
+/* Restore Panel */
+.wpim-restore-panel { }
+.wpim-restore-header { margin-bottom: 20px; }
+.wpim-restore-header h2 { margin: 0 0 6px; font-size: 18px; }
+.wpim-restore-header p { color: #646970; margin: 0 0 14px; }
+.wpim-restore-list { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
+.wpim-restore-item { display: flex; align-items: center; gap: 14px; background: var(--wpim-bg); border-radius: 6px; padding: 12px 16px; border: 1px solid var(--wpim-border); }
+.wpim-restore-item-info { flex: 1; }
+.wpim-restore-item-title { font-weight: 600; font-size: 13px; }
+.wpim-restore-item-meta { font-size: 11px; color: #646970; margin-top: 2px; }
+.wpim-placeholder-sm { color: #646970; text-align: center; padding: 30px; }
+
+/* Spinner */
+.wpim-spinner-inline { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: wpim-spin .6s linear infinite; }
+@keyframes wpim-spin { to { transform: rotate(360deg); } }
+
+/* Toast */
+.wpim-toast { position: fixed; bottom: 30px; right: 30px; background: #1d2327; color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; z-index: 99999; transform: translateY(100px); opacity: 0; transition: all .3s; max-width: 360px; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+.wpim-toast.show { transform: translateY(0); opacity: 1; }
+.wpim-toast.success { border-left: 4px solid var(--wpim-success); }
+.wpim-toast.error { border-left: 4px solid var(--wpim-danger); }
+.wpim-toast.info { border-left: 4px solid var(--wpim-primary); }

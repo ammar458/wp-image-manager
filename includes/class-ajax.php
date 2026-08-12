@@ -87,7 +87,13 @@ class WPIM_Ajax {
 
     public function handle_delete_batch() {
         $this->verify();
-        $this->set_limits();
+        // Batches run up to 250 attachments — each wp_delete_attachment() call
+        // fires its own cache/term-count/hook cascade, so this needs more
+        // headroom than the shared 120s default.
+        if ( ! ini_get('safe_mode') ) {
+            @set_time_limit( 180 );
+            @ini_set( 'memory_limit', '256M' );
+        }
         $ids = isset($_POST['ids']) ? array_map('intval', (array)$_POST['ids']) : [];
         if ( empty($ids) ) wp_send_json_error( 'No IDs provided.' );
         $deleter = new WPIM_Deleter();

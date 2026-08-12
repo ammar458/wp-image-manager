@@ -265,7 +265,7 @@
     // happen in the background afterward — but a batch is still sent as
     // several smaller requests so a very large selection gives the progress
     // bar real percentages to show instead of one long silent wait.
-    var DELETE_CHUNK_SIZE = 100;
+    var DELETE_CHUNK_SIZE = 250;
 
     function doDelete(ids) {
         var $btns = $('#btn-delete-selected, #btn-delete-all-page');
@@ -304,7 +304,7 @@
                 var pct = Math.round((chunkIndex / chunks.length) * 100);
                 showProgress('#delete-progress', '#delete-progress-inner', '#delete-progress-text', pct, 'Moving ' + doneCount + ' of ' + ids.length + ' images to backup… (' + pct + '%)');
                 runNextChunk();
-            }, 120);
+            }, 180);
         }
 
         runNextChunk();

@@ -23,6 +23,9 @@ class WPIM_Deep_Scanner {
     /** @var array<string,int> filename (basename, no size suffix) => attachment ID */
     private $filename_map = [];
 
+    /** @var array<string,int> same as $filename_map but lower-cased, for case-insensitive fallback matches */
+    private $filename_map_lower = [];
+
     /** @var array<int,bool> set of valid image attachment IDs, for validating candidate IDs */
     private $valid_ids = [];
 
@@ -124,25 +127,46 @@ class WPIM_Deep_Scanner {
     private function add_filename( $filename, $id ) {
         if ( ! $filename ) return;
         $this->filename_map[ $filename ] = $id;
+        $this->index_lower( $filename, $id );
         // Also index without a WP size suffix, e.g. photo-300x200.jpg -> photo.jpg
         $stripped = preg_replace( '/-\d+x\d+(?=\.[a-zA-Z0-9]+$)/', '', $filename );
         if ( $stripped !== $filename && ! isset( $this->filename_map[ $stripped ] ) ) {
             $this->filename_map[ $stripped ] = $id;
+            $this->index_lower( $stripped, $id );
+        }
+    }
+
+    private function index_lower( $filename, $id ) {
+        $lower = strtolower( $filename );
+        if ( ! isset( $this->filename_map_lower[ $lower ] ) ) {
+            $this->filename_map_lower[ $lower ] = $id;
         }
     }
 
     private function match_filename_in_string( $text ) {
         $matched = [];
-        if ( strpos( $text, 'uploads' ) === false && strpos( $text, '.jpg' ) === false
-            && strpos( $text, '.jpeg' ) === false && strpos( $text, '.png' ) === false
-            && strpos( $text, '.webp' ) === false && strpos( $text, '.gif' ) === false ) {
+        if ( ! is_string( $text ) || $text === '' ) return $matched;
+
+        // Case-insensitive gate — real-world uploads (camera photos, banner
+        // exports) very often have upper-case extensions like .JPG/.PNG.
+        if ( stripos( $text, 'uploads' ) === false && stripos( $text, '.jpg' ) === false
+            && stripos( $text, '.jpeg' ) === false && stripos( $text, '.png' ) === false
+            && stripos( $text, '.webp' ) === false && stripos( $text, '.gif' ) === false ) {
             return $matched;
         }
-        if ( preg_match_all( '#[a-zA-Z0-9\-_./]+\.(?:jpe?g|png|gif|webp)#i', $text, $m ) ) {
+        // Match up to the extension using "not whitespace/quote/bracket" instead of a
+        // fixed character whitelist, so percent-encoded, unicode, or spaced-but-quoted
+        // filenames aren't silently skipped.
+        if ( preg_match_all( '#[^\s"\'<>()]+\.(?:jpe?g|png|gif|webp)#i', $text, $m ) ) {
             foreach ( $m[0] as $path ) {
                 $base = basename( $path );
                 if ( isset( $this->filename_map[ $base ] ) ) {
                     $matched[] = $this->filename_map[ $base ];
+                } else {
+                    $lower = strtolower( $base );
+                    if ( isset( $this->filename_map_lower[ $lower ] ) ) {
+                        $matched[] = $this->filename_map_lower[ $lower ];
+                    }
                 }
             }
         }
@@ -173,8 +197,11 @@ class WPIM_Deep_Scanner {
     }
 
     /**
-     * 1. AdRotate: images are stored as a path/URL in {$prefix}adrotate.image,
-     *    not as an attachment ID. Match by filename.
+     * 1. AdRotate: images are mainly stored as a path/URL in the 'image' column,
+     *    but banner HTML/JS ads (bannercode) and responsive/Pro variants can
+     *    embed extra <img>/background-image references or a serialized array
+     *    of per-device image paths. Schema also varies across free/Pro
+     *    versions, so columns are detected rather than hard-coded.
      */
     private function scan_adrotate() {
         global $wpdb;
@@ -183,12 +210,59 @@ class WPIM_Deep_Scanner {
         if ( ! $exists ) return 0;
 
         $count = 0;
-        $rows = $wpdb->get_results( "SELECT image FROM `{$table}` WHERE image != ''" );
+
+        $known_columns  = $wpdb->get_col( "DESCRIBE `{$table}`", 0 );
+        $image_columns  = array_intersect(
+            [ 'image', 'bannercode', 'thumbnail', 'desktop_image', 'mobile_image', 'tablet_image', 'mobile_tablet_image' ],
+            $known_columns
+        );
+        if ( empty( $image_columns ) ) return 0;
+
+        $select = implode( ', ', array_map( function ( $c ) { return "`{$c}`"; }, $image_columns ) );
+        $rows   = $wpdb->get_results( "SELECT {$select} FROM `{$table}`", ARRAY_A );
+
         foreach ( $rows as $row ) {
-            foreach ( $this->match_filename_in_string( $row->image ) as $id ) {
-                if ( $this->insert_id( $id, 'adrotate' ) ) $count++;
+            foreach ( $row as $val ) {
+                if ( ! is_string( $val ) || $val === '' ) continue;
+
+                // Pro/responsive versions can store a serialized array of per-size image paths.
+                if ( strpos( $val, 'a:' ) === 0 ) {
+                    $decoded = @unserialize( $val, [ 'allowed_classes' => false ] );
+                    if ( $decoded !== false ) {
+                        $found = [];
+                        $this->walk_value( $decoded, $found );
+                        foreach ( array_unique( $found ) as $id ) {
+                            if ( $this->insert_id( $id, 'adrotate' ) ) $count++;
+                        }
+                        continue;
+                    }
+                }
+
+                foreach ( $this->match_filename_in_string( $val ) as $id ) {
+                    if ( $this->insert_id( $id, 'adrotate' ) ) $count++;
+                }
             }
         }
+
+        // AdRotate Pro keeps a separate table for its newer "Creatives" ad type.
+        $creatives_table = $wpdb->prefix . 'adrotate_creatives';
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$creatives_table}'" ) ) {
+            $creative_columns = $wpdb->get_col( "DESCRIBE `{$creatives_table}`", 0 );
+            $creative_image_columns = array_intersect( [ 'image', 'bannercode', 'thumbnail' ], $creative_columns );
+            if ( ! empty( $creative_image_columns ) ) {
+                $c_select = implode( ', ', array_map( function ( $c ) { return "`{$c}`"; }, $creative_image_columns ) );
+                $c_rows   = $wpdb->get_results( "SELECT {$c_select} FROM `{$creatives_table}`", ARRAY_A );
+                foreach ( $c_rows as $row ) {
+                    foreach ( $row as $val ) {
+                        if ( ! is_string( $val ) || $val === '' ) continue;
+                        foreach ( $this->match_filename_in_string( $val ) as $id ) {
+                            if ( $this->insert_id( $id, 'adrotate' ) ) $count++;
+                        }
+                    }
+                }
+            }
+        }
+
         return $count;
     }
 

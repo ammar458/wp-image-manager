@@ -267,6 +267,7 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
                 'gdrive_disconnected'   => [ 'info', 'Google Drive disconnected. Backup destination reset to WordPress (local).' ],
                 'gdrive_not_configured' => [ 'error', 'Please enter your Google OAuth Client ID and Client Secret and save before connecting.' ],
                 'gdrive_error'          => [ 'error', 'Could not connect to Google Drive. Please check your Client ID/Secret and try again.' ],
+                'gdrive_cron_regenerated' => [ 'success', 'Cron URL regenerated — update any external scheduler with the new URL below; the old one no longer works.' ],
             ];
             if ( $wpim_msg && isset( $wpim_messages[ $wpim_msg ] ) ) :
                 list( $wpim_msg_type, $wpim_msg_text ) = $wpim_messages[ $wpim_msg ];
@@ -319,6 +320,20 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
                     <p class="wpim-placeholder-sm">Enter and save a Client ID/Secret above to enable connecting.</p>
                 <?php endif; ?>
             </div>
+
+            <?php if ( WPIM_Google_Drive::is_connected() ) : ?>
+            <div class="wpim-gdrive-status" style="margin-top:20px">
+                <h3>External Cron URL</h3>
+                <p class="wpim-settings-note">
+                    Uploads to Drive normally piggyback on site traffic (a visitor loads a page, which nudges the queue). If your site gets little or no traffic, or your host restricts WP-Cron, nothing triggers that. Add this URL to a scheduler <strong>outside WordPress</strong> — your host's cPanel "Cron Jobs", or a free service like
+                    <a href="https://cron-job.org" target="_blank" rel="noopener noreferrer">cron-job.org</a> — set to run every 5 minutes, and uploads will keep moving even with zero visitors.
+                </p>
+                <code class="wpim-redirect-uri"><?php echo esc_html( WPIM_Google_Drive::get_cron_url() ); ?></code>
+                <p>
+                    <a class="wpim-btn wpim-btn-outline wpim-btn-sm" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=wpim_gdrive_regenerate_cron' ), 'wpim_gdrive_regenerate_cron' ) ); ?>" onclick="return confirm('This invalidates the current URL — any scheduler using it will need to be updated. Continue?');">Regenerate URL</a>
+                </p>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 

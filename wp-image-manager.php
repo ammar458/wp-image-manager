@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Image Manager Pro
  * Description: Detect & delete unattached images, auto-convert uploads to WebP, backup & restore.
- * Version: 1.8.1
+ * Version: 1.9.0
  * Author: Ringomedia
  * Text Domain: wp-image-manager
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WPIM_VERSION', '1.8.1' );
+define( 'WPIM_VERSION', '1.9.0' );
 define( 'WPIM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPIM_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPIM_GITHUB_REPO', 'ammar458/wp-image-manager' );
@@ -105,6 +105,31 @@ function wpim_maybe_process_gdrive_queue_directly() {
 
     if ( function_exists( 'fastcgi_finish_request' ) ) fastcgi_finish_request();
     ( new WPIM_Deleter() )->process_gdrive_queue();
+}
+
+/**
+ * External-cron endpoint: lets a scheduler OUTSIDE WordPress (host cron,
+ * or a free service like cron-job.org) drain the upload queue on a fixed
+ * schedule even when the site gets zero visitors — which every other
+ * trigger here (WP-Cron's pseudo-cron, the direct fallback above) still
+ * fundamentally needs a request to piggyback on. URL + setup instructions
+ * are shown on the Backup Settings tab. Runs on 'init' so it doesn't pull in
+ * the full admin/theme bootstrap, and stays out of normal page rendering
+ * entirely — a real request just returns "Forbidden" if the token doesn't match.
+ */
+add_action( 'init', 'wpim_maybe_handle_external_cron_request' );
+function wpim_maybe_handle_external_cron_request() {
+    if ( empty( $_GET['wpim_gdrive_process'] ) ) return;
+
+    $secret = get_option( 'wpim_gdrive_cron_secret' );
+    if ( ! $secret || ! hash_equals( $secret, wp_unslash( $_GET['wpim_gdrive_process'] ) ) ) {
+        status_header( 403 );
+        exit( 'Forbidden' );
+    }
+
+    nocache_headers();
+    ( new WPIM_Deleter() )->process_gdrive_queue();
+    exit( 'WP Image Manager Pro: Google Drive queue processed.' );
 }
 
 add_action( 'admin_menu', 'wpim_add_menu' );

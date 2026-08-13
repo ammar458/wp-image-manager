@@ -12,6 +12,7 @@ class WPIM_Settings {
         add_action( 'admin_post_wpim_gdrive_connect', [ $this, 'connect' ] );
         add_action( 'admin_post_wpim_gdrive_oauth_callback', [ $this, 'oauth_callback' ] );
         add_action( 'admin_post_wpim_gdrive_disconnect', [ $this, 'disconnect' ] );
+        add_action( 'admin_post_wpim_gdrive_regenerate_cron', [ $this, 'regenerate_cron_secret' ] );
     }
 
     private function check_cap() {
@@ -82,6 +83,15 @@ class WPIM_Settings {
         update_option( 'wpim_backup_destination', 'local' );
 
         $this->redirect_to_settings( 'gdrive_disconnected' );
+    }
+
+    public function regenerate_cron_secret() {
+        $this->check_cap();
+        check_admin_referer( 'wpim_gdrive_regenerate_cron' );
+
+        WPIM_Google_Drive::regenerate_cron_secret();
+
+        $this->redirect_to_settings( 'gdrive_cron_regenerated' );
     }
 }
 

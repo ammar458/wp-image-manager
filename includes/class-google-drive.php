@@ -32,6 +32,33 @@ class WPIM_Google_Drive {
         if ( function_exists( 'spawn_cron' ) ) spawn_cron();
     }
 
+    /**
+     * Secret token for the external-cron endpoint (see
+     * wpim_maybe_handle_external_cron_request() in the main plugin file) —
+     * lets an outside scheduler (host cron, or a free service like
+     * cron-job.org) drain the upload queue even when the site itself gets
+     * no visitors to piggyback on, which both WP-Cron and our own
+     * request-triggered fallback otherwise depend on.
+     */
+    public static function get_cron_secret() {
+        $secret = get_option( 'wpim_gdrive_cron_secret' );
+        if ( ! $secret ) {
+            $secret = wp_generate_password( 32, false );
+            update_option( 'wpim_gdrive_cron_secret', $secret );
+        }
+        return $secret;
+    }
+
+    public static function get_cron_url() {
+        return add_query_arg( 'wpim_gdrive_process', self::get_cron_secret(), home_url( '/' ) );
+    }
+
+    public static function regenerate_cron_secret() {
+        $secret = wp_generate_password( 32, false );
+        update_option( 'wpim_gdrive_cron_secret', $secret );
+        return $secret;
+    }
+
     public static function is_configured() {
         return (bool) get_option( 'wpim_gdrive_client_id' ) && (bool) get_option( 'wpim_gdrive_client_secret' );
     }

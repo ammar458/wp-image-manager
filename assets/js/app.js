@@ -845,6 +845,38 @@
         if (e.key === 'Enter') { e.preventDefault(); jumpToRestorePage('converted'); }
     });
 
+    // ─── Missing Images (boats / dlr_boats) ────────────────────────────
+    $('#btn-load-missing-images').on('click', function() {
+        var $btn = $(this).prop('disabled', true);
+        $('#missing-images-list').html('<p class="wpim-placeholder-sm">Checking listings…</p>');
+        ajax('wpim_get_missing_images', {}, function(err, data) {
+            $btn.prop('disabled', false);
+            if (err) { toast('Error: ' + err, 'error'); return; }
+            var items = data.items || [];
+            if (!items.length) {
+                $('#missing-images-list').html('<p class="wpim-placeholder-sm">✅ Every boats/dlr_boats listing has a featured image and gallery images.</p>');
+                return;
+            }
+            var html = '';
+            $.each(items, function(i, item) {
+                var featBadge = item.has_featured
+                    ? '<span class="wpim-storage-badge good">Featured OK</span>'
+                    : '<span class="wpim-storage-badge pending">No Featured Image</span>';
+                var galBadge = item.image_count > 1
+                    ? '<span class="wpim-storage-badge good">' + (item.image_count - (item.has_featured ? 1 : 0)) + ' other image(s)</span>'
+                    : '<span class="wpim-storage-badge pending">No Gallery Images</span>';
+                html += '<div class="wpim-restore-item">'
+                      +   '<div class="wpim-restore-item-info">'
+                      +     '<div class="wpim-restore-item-title">' + escHtml(item.title) + ' ' + featBadge + ' ' + galBadge + '</div>'
+                      +     '<div class="wpim-restore-item-meta">ID: ' + item.id + ' &nbsp;·&nbsp; Type: ' + escHtml(item.post_type) + '</div>'
+                      +   '</div>'
+                      +   (item.edit_link ? '<a class="wpim-btn wpim-btn-primary wpim-btn-sm" href="' + escHtml(item.edit_link) + '" target="_blank" rel="noopener">✏️ Edit</a>' : '')
+                      + '</div>';
+            });
+            $('#missing-images-list').html(html);
+        });
+    });
+
     function escHtml(str) {
         return $('<div>').text(str || '').html();
     }

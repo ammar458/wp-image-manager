@@ -360,6 +360,56 @@ class WPIM_Scanner {
     }
 
     /**
+     * Boat listings (post types 'boats' and 'dlr_boats') that are missing a
+     * featured image and/or any gallery/content image. Reuses owner_id from
+     * _wpim_attached_tmp — the same table that powers Browse Attached — so
+     * "image_count" here is every image this scanner has ever found linked
+     * to that post (thumbnail, gallery/postmeta fields, or images referenced
+     * in the post content), not just the featured image.
+     */
+    public function get_posts_missing_images( $post_types = [ 'boats', 'dlr_boats' ] ) {
+        global $wpdb;
+        $this->maybe_build_attached_temp_table();
+
+        $placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
+
+        $rows = $wpdb->get_results( $wpdb->prepare( "
+            SELECT p.ID, p.post_title, p.post_type,
+                ( SELECT COUNT(*) FROM _wpim_attached_tmp t WHERE t.owner_id = p.ID ) AS image_count,
+                ( SELECT CAST(pm.meta_value AS UNSIGNED) FROM {$wpdb->postmeta} pm
+                  WHERE pm.post_id = p.ID AND pm.meta_key = '_thumbnail_id' LIMIT 1 ) AS thumbnail_id
+            FROM {$wpdb->posts} p
+            WHERE p.post_type IN ({$placeholders})
+            AND p.post_status NOT IN ('trash','auto-draft')
+        ", $post_types ) );
+
+        $items = [];
+        foreach ( $rows as $row ) {
+            $has_featured = ! empty( $row->thumbnail_id ) && get_post( (int) $row->thumbnail_id );
+            $image_count  = (int) $row->image_count;
+
+            // Only surface listings actually missing something — a featured
+            // image plus 2+ other images (real gallery) isn't worth listing.
+            if ( $has_featured && $image_count > 1 ) continue;
+
+            $items[] = [
+                'id'           => (int) $row->ID,
+                'title'        => $row->post_title !== '' ? $row->post_title : '(no title)',
+                'post_type'    => $row->post_type,
+                'edit_link'    => get_edit_post_link( (int) $row->ID, '' ),
+                'has_featured' => $has_featured,
+                'image_count'  => $image_count,
+            ];
+        }
+
+        usort( $items, function( $a, $b ) {
+            return strcasecmp( $a['title'], $b['title'] );
+        } );
+
+        return $items;
+    }
+
+    /**
      * Turn a temp-table row (source + owner_id) into a human-readable "where
      * is this attached" label plus an edit link, for the Browse Attached tab.
      * owner_id means different things per source (post ID, user ID, term ID)

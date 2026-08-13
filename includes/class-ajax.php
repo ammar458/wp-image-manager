@@ -9,6 +9,7 @@ class WPIM_Ajax {
             'wpim_get_page',
             'wpim_get_attached_categories',
             'wpim_get_attached_page',
+            'wpim_get_missing_images',
             'wpim_delete_batch',
             'wpim_bulk_convert',
             'wpim_get_converted',
@@ -113,6 +114,18 @@ class WPIM_Ajax {
             wp_send_json_success( $data );
         } catch ( Exception $e ) {
             wp_send_json_error( 'Page load error: ' . $e->getMessage() );
+        }
+    }
+
+    public function handle_get_missing_images() {
+        $this->verify();
+        $this->set_limits();
+        $scanner = new WPIM_Scanner();
+        try {
+            $items = $scanner->get_posts_missing_images();
+            wp_send_json_success( [ 'items' => $items ] );
+        } catch ( Exception $e ) {
+            wp_send_json_error( 'Error loading listings: ' . $e->getMessage() );
         }
     }
 

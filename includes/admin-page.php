@@ -52,6 +52,7 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
     <div class="wpim-tabs">
         <button class="wpim-tab<?php echo $wpim_active_tab === 'unattached' ? ' active' : ''; ?>" data-tab="unattached">🗂️ Unattached Images</button>
         <button class="wpim-tab" data-tab="attached">🏷️ Browse Attached</button>
+        <button class="wpim-tab" data-tab="missing-images">🚤 Missing Images</button>
         <button class="wpim-tab" data-tab="convert">🔄 WebP Converter</button>
         <button class="wpim-tab" data-tab="restore-deleted">♻️ Restore Deleted</button>
         <button class="wpim-tab" data-tab="restore-converted">↩️ Revert WebP</button>
@@ -134,6 +135,20 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
             <button class="wpim-btn wpim-btn-sm" id="btn-attached-prev" disabled>← Prev</button>
             <span id="attached-page-info">Page 1 of 1</span>
             <button class="wpim-btn wpim-btn-sm" id="btn-attached-next" disabled>Next →</button>
+        </div>
+    </div>
+
+    <!-- Tab: Missing Images -->
+    <div class="wpim-tab-content" id="tab-missing-images">
+        <div class="wpim-restore-panel">
+            <div class="wpim-restore-header">
+                <h2>🚤 Boats Missing Images</h2>
+                <p>Boat and dealer-boat listings with no featured image, no gallery/content images, or both — cross-checked against everything this plugin's scanner has found linked to each listing.</p>
+                <button class="wpim-btn wpim-btn-sm" id="btn-load-missing-images">🔄 Load / Refresh</button>
+            </div>
+            <div id="missing-images-list" class="wpim-restore-list">
+                <p class="wpim-placeholder-sm">Click "Load / Refresh" to check your boats and dlr_boats listings.</p>
+            </div>
         </div>
     </div>
 

@@ -146,6 +146,7 @@ a.wpim-card-attached:hover { color: var(--wpim-primary); text-decoration: underl
 .wpim-storage-badge.gdrive { background: #e8f0fe; color: #1a73e8; }
 .wpim-storage-badge.pending { background: #fdf2d0; color: #8a6d00; }
 .wpim-storage-badge.mixed { background: #fdf2d0; color: #8a6d00; }
+.wpim-storage-badge.good { background: #e6f4ea; color: #0a7a2e; }
 
 /* Settings Panel */
 .wpim-settings-panel { max-width: 700px; }

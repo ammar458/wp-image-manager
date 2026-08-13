@@ -217,4 +217,68 @@ class WPIM_Recovery {
                 update_post_meta( $post_id, $key, implode( ',', $new_ids ) );
         }
     }
+
+    /**
+     * Fixes an Elementor-authored page/post whose _elementor_data still
+     * references an attachment ID that no longer exists on this site (e.g.
+     * a background-image widget pointing at a deleted attachment — Elementor
+     * silently omits the CSS rule for it rather than erroring, so the page
+     * just renders with a blank box and no obvious clue why). Sideloads a
+     * replacement from source_image_url, rewrites every {id,url} image
+     * reference matching the old ID anywhere in the page's widget tree, and
+     * clears Elementor's cached CSS for the page so the fix actually shows
+     * up on next load instead of continuing to serve the stale cached rule.
+     */
+    public function fix_elementor_image( $post_id, $old_attachment_id, $source_image_url ) {
+        $new_id = $this->sideload_image( $source_image_url );
+        if ( is_wp_error( $new_id ) ) {
+            return [ 'success' => false, 'error' => $new_id->get_error_message() ];
+        }
+        $new_url = wp_get_attachment_url( $new_id );
+
+        $raw = get_post_meta( $post_id, '_elementor_data', true );
+        if ( ! $raw ) {
+            return [ 'success' => false, 'error' => 'No _elementor_data found for this post.', 'new_attachment_id' => $new_id ];
+        }
+
+        $data = json_decode( $raw, true );
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return [ 'success' => false, 'error' => 'Could not parse _elementor_data JSON.', 'new_attachment_id' => $new_id ];
+        }
+
+        $replacements = 0;
+        $walk = function ( &$node ) use ( &$walk, &$replacements, $old_attachment_id, $new_id, $new_url ) {
+            if ( ! is_array( $node ) ) return;
+            if ( isset( $node['id'], $node['url'] ) && (int) $node['id'] === (int) $old_attachment_id ) {
+                $node['id']  = $new_id;
+                $node['url'] = $new_url;
+                $replacements++;
+            }
+            foreach ( $node as &$value ) {
+                if ( is_array( $value ) ) $walk( $value );
+            }
+        };
+        $walk( $data );
+
+        if ( $replacements === 0 ) {
+            return [ 'success' => false, 'error' => 'No matching image reference found in _elementor_data.', 'new_attachment_id' => $new_id ];
+        }
+
+        update_post_meta( $post_id, '_elementor_data', wp_json_encode( $data ) );
+
+        // Force Elementor to regenerate this page's cached CSS on next view —
+        // otherwise the fixed data is correct but the stale cached CSS file
+        // (missing the background-image rule entirely) keeps being served.
+        delete_post_meta( $post_id, '_elementor_css' );
+        $upload_dir = wp_upload_dir();
+        $css_file   = $upload_dir['basedir'] . '/elementor/css/post-' . $post_id . '.css';
+        if ( file_exists( $css_file ) ) @unlink( $css_file );
+
+        return [
+            'success'           => true,
+            'new_attachment_id' => $new_id,
+            'new_url'           => $new_url,
+            'replacements'      => $replacements,
+        ];
+    }
 }

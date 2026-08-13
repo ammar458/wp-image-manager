@@ -32,6 +32,12 @@ class WPIM_Rest {
             'permission_callback' => function () { return current_user_can( 'manage_options' ); },
             'callback'            => [ $this, 'handle_recover' ],
         ] );
+
+        register_rest_route( 'wpim/v1', '/fix-elementor-image', [
+            'methods'             => 'POST',
+            'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+            'callback'            => [ $this, 'handle_fix_elementor_image' ],
+        ] );
     }
 
     public function handle_inspect( $req ) {
@@ -74,6 +80,25 @@ class WPIM_Rest {
 
         $recovery = new WPIM_Recovery();
         $result   = $recovery->recover_post( $post_id, $post_type, $featured_url, $gallery_urls, $dry_run );
+
+        return rest_ensure_response( $result );
+    }
+
+    public function handle_fix_elementor_image( WP_REST_Request $req ) {
+        if ( ! ini_get( 'safe_mode' ) ) {
+            @set_time_limit( 60 );
+        }
+
+        $post_id  = (int) $req->get_param( 'post_id' );
+        $old_id   = (int) $req->get_param( 'old_attachment_id' );
+        $source   = $req->get_param( 'source_image_url' );
+
+        if ( ! $post_id || ! $old_id || ! is_string( $source ) || ! wp_http_validate_url( $source ) || strpos( $source, 'https://' ) !== 0 ) {
+            return new WP_Error( 'wpim_bad_request', 'post_id, old_attachment_id, and an https source_image_url are required.', [ 'status' => 400 ] );
+        }
+
+        $recovery = new WPIM_Recovery();
+        $result   = $recovery->fix_elementor_image( $post_id, $old_id, $source );
 
         return rest_ensure_response( $result );
     }

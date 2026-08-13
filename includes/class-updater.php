@@ -31,6 +31,75 @@ class WPIM_Updater {
         // hand back our stale 6-hour-old cached release info.
         add_action( 'delete_site_transient_update_plugins', [ $this, 'clear_cache' ] );
         add_action( 'admin_notices', [ $this, 'maybe_show_error_notice' ] );
+
+        add_filter( "plugin_action_links_{$this->basename}", [ $this, 'add_check_update_link' ] );
+        add_action( 'admin_init', [ $this, 'maybe_handle_check_update' ] );
+        add_action( 'admin_notices', [ $this, 'maybe_show_check_result_notice' ] );
+    }
+
+    /**
+     * Adds a "Check for updates" link next to Deactivate/Activate on the
+     * Plugins list table, mirroring the row-action pattern WP core plugins use.
+     */
+    public function add_check_update_link( $links ) {
+        $url = wp_nonce_url(
+            add_query_arg( [
+                'wpim_check_update' => 1,
+                'plugin'            => $this->basename,
+            ], admin_url( 'plugins.php' ) ),
+            'wpim_check_update_' . $this->basename
+        );
+
+        $links['wpim_check_update'] = '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Check for updates', 'wp-image-manager' ) . '</a>';
+
+        return $links;
+    }
+
+    /**
+     * Runs on admin_init (rather than a dedicated admin_action_ hook) so the
+     * redirect happens before the Plugins list table renders, without needing
+     * a separate no-UI admin page to host the handler.
+     */
+    public function maybe_handle_check_update() {
+        if ( empty( $_GET['wpim_check_update'] ) || ( $_GET['plugin'] ?? '' ) !== $this->basename ) return;
+        if ( ! current_user_can( 'update_plugins' ) ) return;
+        check_admin_referer( 'wpim_check_update_' . $this->basename );
+
+        delete_transient( $this->cache_key );
+        $release = $this->get_release();
+
+        if ( $release ) {
+            $remote_version = ltrim( $release->tag_name, 'v' );
+            $status = version_compare( $remote_version, $this->version, '>' ) ? 'available' : 'latest';
+        } else {
+            $status = 'error';
+        }
+        set_transient( 'wpim_check_update_result', $status, MINUTE_IN_SECONDS );
+
+        // Also clear WP's own update transient so "Update Now" appears right
+        // away instead of waiting for WP's normal 12-hour recheck cycle.
+        delete_site_transient( 'update_plugins' );
+
+        wp_safe_redirect( remove_query_arg( [ 'wpim_check_update', 'plugin', '_wpnonce' ] ) );
+        exit;
+    }
+
+    public function maybe_show_check_result_notice() {
+        if ( ! current_user_can( 'update_plugins' ) ) return;
+        $screen = get_current_screen();
+        if ( ! $screen || $screen->id !== 'plugins' ) return;
+
+        $status = get_transient( 'wpim_check_update_result' );
+        if ( ! $status ) return;
+        delete_transient( 'wpim_check_update_result' );
+
+        if ( $status === 'available' ) {
+            echo '<div class="notice notice-success is-dismissible"><p><strong>WP Image Manager Pro:</strong> a new version is available below.</p></div>';
+        } elseif ( $status === 'latest' ) {
+            echo '<div class="notice notice-success is-dismissible"><p><strong>WP Image Manager Pro:</strong> you already have the latest version (' . esc_html( $this->version ) . ').</p></div>';
+        } else {
+            echo '<div class="notice notice-error is-dismissible"><p><strong>WP Image Manager Pro:</strong> the update check failed. See the notice below for details.</p></div>';
+        }
     }
 
     private function get_release() {

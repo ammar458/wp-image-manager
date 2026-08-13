@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Image Manager Pro
  * Description: Detect & delete unattached images, auto-convert uploads to WebP, backup & restore.
- * Version: 1.8.0
+ * Version: 1.8.1
  * Author: Ringomedia
  * Text Domain: wp-image-manager
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WPIM_VERSION', '1.8.0' );
+define( 'WPIM_VERSION', '1.8.1' );
 define( 'WPIM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPIM_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPIM_GITHUB_REPO', 'ammar458/wp-image-manager' );
@@ -77,6 +77,33 @@ function wpim_ensure_gdrive_sweep_scheduled() {
 add_action( 'wpim_gdrive_queue_tick', 'wpim_process_gdrive_queue' );
 add_action( 'wpim_gdrive_queue_sweep', 'wpim_process_gdrive_queue' );
 function wpim_process_gdrive_queue() {
+    ( new WPIM_Deleter() )->process_gdrive_queue();
+}
+
+/**
+ * Fallback that drains the Google Drive upload queue directly, independent
+ * of WP-Cron. WP-Cron's own trigger is an HTTP loopback request to itself
+ * (spawn_cron()) — on hosts that disable WP-Cron, block self-requests, or
+ * just get very little traffic, that loopback can silently never fire,
+ * leaving deletes stuck as "gdrive_pending" forever with no visible error.
+ * This runs on every request instead (throttled), after the response has
+ * already gone out, so it doesn't cost the page that triggered it anything
+ * and doesn't depend on the site being able to call itself over HTTP.
+ */
+add_action( 'shutdown', 'wpim_maybe_process_gdrive_queue_directly' );
+function wpim_maybe_process_gdrive_queue_directly() {
+    if ( get_option( 'wpim_backup_destination', 'local' ) !== 'gdrive' ) return;
+    if ( ! get_option( 'wpim_gdrive_refresh_token' ) ) return;
+
+    // Throttle how often we even bother checking — process_gdrive_queue()
+    // itself has its own lock against concurrent runs; this just avoids a
+    // filesystem scan on every single page load.
+    if ( get_transient( 'wpim_gdrive_direct_check' ) ) return;
+    set_transient( 'wpim_gdrive_direct_check', 1, 2 * MINUTE_IN_SECONDS );
+
+    if ( ! glob( WPIM_BACKUP_DELETED . '/*/meta.json' ) ) return;
+
+    if ( function_exists( 'fastcgi_finish_request' ) ) fastcgi_finish_request();
     ( new WPIM_Deleter() )->process_gdrive_queue();
 }
 

@@ -95,51 +95,60 @@ class WPIM_Deleter {
     /**
      * Upload every 'gdrive_pending' file left in the local backup folder to
      * Google Drive, mirroring the original upload folder structure under a
-     * per-attachment folder (WP Image Manager Backups/deleted/<id>/...). Runs
-     * off the request thread via WP-Cron, so deletes never wait on this.
+     * per-attachment folder (WP Image Manager Backups/deleted/<id>/...).
+     * Called from several places (cron tick, cron sweep, the manual "Process
+     * Now" button, and wpim_maybe_process_gdrive_queue_directly()'s
+     * WP-Cron-independent fallback) — the lock keeps two of those from
+     * racing to upload the same pending file at once.
      */
     public function process_gdrive_queue( $limit = 25 ) {
         if ( ! WPIM_Google_Drive::is_connected() ) return;
+        if ( get_transient( 'wpim_gdrive_queue_lock' ) ) return;
+        set_transient( 'wpim_gdrive_queue_lock', 1, MINUTE_IN_SECONDS );
 
-        $meta_files = glob( WPIM_BACKUP_DELETED . '/*/meta.json' );
-        if ( ! $meta_files ) return;
+        try {
+            $meta_files = glob( WPIM_BACKUP_DELETED . '/*/meta.json' );
+            if ( ! $meta_files ) return;
 
-        $upload_dir = wp_upload_dir();
-        $processed  = 0;
+            $upload_dir = wp_upload_dir();
+            $processed  = 0;
 
-        foreach ( $meta_files as $meta_file ) {
-            if ( $processed >= $limit ) {
-                // More pending than fit in one tick — drain the rest right away
-                // instead of waiting for the next safety-net sweep.
-                WPIM_Google_Drive::kick_off_queue();
-                return;
-            }
+            foreach ( $meta_files as $meta_file ) {
+                if ( $processed >= $limit ) {
+                    // More pending than fit in one tick — drain the rest right away
+                    // instead of waiting for the next safety-net sweep.
+                    WPIM_Google_Drive::kick_off_queue();
+                    return;
+                }
 
-            $meta = json_decode( file_get_contents( $meta_file ), true );
-            if ( ! $meta || ( $meta['storage'] ?? '' ) !== 'gdrive_pending' ) continue;
+                $meta = json_decode( file_get_contents( $meta_file ), true );
+                if ( ! $meta || ( $meta['storage'] ?? '' ) !== 'gdrive_pending' ) continue;
 
-            $id     = $meta['id'];
-            $rel    = str_replace( $upload_dir['basedir'] . DIRECTORY_SEPARATOR, '', $meta['file'] );
-            $staged = dirname( $meta_file ) . '/' . $rel;
+                $id     = $meta['id'];
+                $rel    = str_replace( $upload_dir['basedir'] . DIRECTORY_SEPARATOR, '', $meta['file'] );
+                $staged = dirname( $meta_file ) . '/' . $rel;
 
-            if ( ! file_exists( $staged ) ) continue; // Restored (or otherwise gone) since it was queued.
+                if ( ! file_exists( $staged ) ) continue; // Restored (or otherwise gone) since it was queued.
 
-            $processed++;
-            $result = $this->backup_staged_file_to_gdrive( $id, $staged, $rel );
+                $processed++;
+                $result = $this->backup_staged_file_to_gdrive( $id, $staged, $rel );
 
-            if ( ! $result['success'] ) {
-                // Left as 'gdrive_pending' — retried on the next tick.
-                $meta['last_upload_error'] = $result['message'];
+                if ( ! $result['success'] ) {
+                    // Left as 'gdrive_pending' — retried on the next tick.
+                    $meta['last_upload_error'] = $result['message'];
+                    file_put_contents( $meta_file, json_encode( $meta, JSON_PRETTY_PRINT ) );
+                    continue;
+                }
+
+                $meta['storage']     = 'gdrive';
+                $meta['drive_files'] = $result['drive_files'];
+                unset( $meta['last_upload_error'] );
                 file_put_contents( $meta_file, json_encode( $meta, JSON_PRETTY_PRINT ) );
-                continue;
+
+                @unlink( $staged );
             }
-
-            $meta['storage']     = 'gdrive';
-            $meta['drive_files'] = $result['drive_files'];
-            unset( $meta['last_upload_error'] );
-            file_put_contents( $meta_file, json_encode( $meta, JSON_PRETTY_PRINT ) );
-
-            @unlink( $staged );
+        } finally {
+            delete_transient( 'wpim_gdrive_queue_lock' );
         }
     }
 

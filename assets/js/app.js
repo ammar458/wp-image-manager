@@ -583,7 +583,7 @@
                       + '</div>';
             });
             $('#deleted-list').html(html);
-            renderRestorePagination('#deleted-pagination', '#deleted-page-info', '#btn-deleted-first', '#btn-deleted-prev', '#btn-deleted-next', '#btn-deleted-last', page, state.deletedTotalPages);
+            renderRestorePagination('deleted', page, state.deletedTotalPages);
         });
     }
 
@@ -632,7 +632,7 @@
                       + '</div>';
             });
             $('#converted-list').html(html);
-            renderRestorePagination('#converted-pagination', '#converted-page-info', '#btn-converted-first', '#btn-converted-prev', '#btn-converted-next', '#btn-converted-last', page, state.convertedTotalPages);
+            renderRestorePagination('converted', page, state.convertedTotalPages);
         });
     }
 
@@ -649,15 +649,44 @@
     });
 
     // ─── Helpers ──────────────────────────────────────────────────────
-    function renderRestorePagination(pag, info, first, prev, next, last, page, total) {
-        if (total <= 1) { $(pag).hide(); return; }
-        $(pag).show();
-        $(info).text('Page ' + page + ' of ' + total);
-        $(first).prop('disabled', page <= 1);
-        $(prev).prop('disabled', page <= 1);
-        $(next).prop('disabled', page >= total);
-        $(last).prop('disabled', page >= total);
+    function renderRestorePagination(prefix, page, total) {
+        var $pag = $('#' + prefix + '-pagination');
+        if (total <= 1) { $pag.hide(); return; }
+        $pag.show();
+        $('#' + prefix + '-page-input').val(page).attr('max', total);
+        $('#' + prefix + '-page-total').text(total);
+        $('#btn-' + prefix + '-first').prop('disabled', page <= 1);
+        $('#btn-' + prefix + '-prev').prop('disabled', page <= 1);
+        $('#btn-' + prefix + '-next').prop('disabled', page >= total);
+        $('#btn-' + prefix + '-last').prop('disabled', page >= total);
     }
+
+    // ─── Restore pagination: jump to typed page ───────────────────────
+    var RESTORE_LOADERS = {
+        deleted:   { load: loadDeletedList,   total: function() { return state.deletedTotalPages; } },
+        converted: { load: loadConvertedList, total: function() { return state.convertedTotalPages; } }
+    };
+
+    function jumpToRestorePage(prefix) {
+        var cfg = RESTORE_LOADERS[prefix];
+        if (!cfg) return;
+        var $input = $('#' + prefix + '-page-input');
+        var total = cfg.total();
+        var page = parseInt($input.val(), 10);
+        if (!page || page < 1) page = 1;
+        if (page > total) page = total;
+        $input.val(page);
+        cfg.load(page);
+    }
+
+    $(document).on('click', '#btn-deleted-go', function() { jumpToRestorePage('deleted'); });
+    $(document).on('click', '#btn-converted-go', function() { jumpToRestorePage('converted'); });
+    $(document).on('keydown', '#deleted-page-input', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); jumpToRestorePage('deleted'); }
+    });
+    $(document).on('keydown', '#converted-page-input', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); jumpToRestorePage('converted'); }
+    });
 
     function escHtml(str) {
         return $('<div>').text(str || '').html();

@@ -97,7 +97,9 @@
 
 /* Pagination */
 .wpim-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 20px; }
-#page-info, #deleted-page-info, #converted-page-info, #attached-page-info { font-size: 13px; font-weight: 600; color: #646970; }
+#page-info, #attached-page-info { font-size: 13px; font-weight: 600; color: #646970; }
+.wpim-page-jump { font-size: 13px; font-weight: 600; color: #646970; display: flex; align-items: center; gap: 6px; }
+.wpim-page-input { width: 56px; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--wpim-border); text-align: center; font-size: 13px; }
 
 /* Convert Panel */
 .wpim-convert-panel { max-width: 700px; }

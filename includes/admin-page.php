@@ -199,7 +199,10 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
             <div class="wpim-pagination" id="deleted-pagination" style="display:none">
                 <button class="wpim-btn wpim-btn-sm" id="btn-deleted-first" disabled>« First</button>
                 <button class="wpim-btn wpim-btn-sm" id="btn-deleted-prev" disabled>← Prev</button>
-                <span id="deleted-page-info">Page 1 of 1</span>
+                <span class="wpim-page-jump">
+                    Page <input type="number" id="deleted-page-input" class="wpim-page-input" min="1" value="1"> of <span id="deleted-page-total">1</span>
+                </span>
+                <button class="wpim-btn wpim-btn-sm" id="btn-deleted-go">Go</button>
                 <button class="wpim-btn wpim-btn-sm" id="btn-deleted-next" disabled>Next →</button>
                 <button class="wpim-btn wpim-btn-sm" id="btn-deleted-last" disabled>Last »</button>
             </div>
@@ -220,7 +223,10 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
             <div class="wpim-pagination" id="converted-pagination" style="display:none">
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-first" disabled>« First</button>
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-prev" disabled>← Prev</button>
-                <span id="converted-page-info">Page 1 of 1</span>
+                <span class="wpim-page-jump">
+                    Page <input type="number" id="converted-page-input" class="wpim-page-input" min="1" value="1"> of <span id="converted-page-total">1</span>
+                </span>
+                <button class="wpim-btn wpim-btn-sm" id="btn-converted-go">Go</button>
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-next" disabled>Next →</button>
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-last" disabled>Last »</button>
             </div>

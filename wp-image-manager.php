@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Image Manager Pro
  * Description: Detect & delete unattached images, auto-convert uploads to WebP, backup & restore.
- * Version: 1.14.0
+ * Version: 1.15.0
  * Author: Ringomedia
  * Text Domain: wp-image-manager
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WPIM_VERSION', '1.14.0' );
+define( 'WPIM_VERSION', '1.15.0' );
 define( 'WPIM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPIM_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPIM_GITHUB_REPO', 'ammar458/wp-image-manager' );
@@ -25,6 +25,8 @@ require_once WPIM_DIR . 'includes/class-restorer.php';
 require_once WPIM_DIR . 'includes/class-google-drive.php';
 require_once WPIM_DIR . 'includes/class-settings.php';
 require_once WPIM_DIR . 'includes/class-ajax.php';
+require_once WPIM_DIR . 'includes/class-recovery.php';
+require_once WPIM_DIR . 'includes/class-rest.php';
 require_once WPIM_DIR . 'includes/class-updater.php';
 
 register_activation_hook( __FILE__, 'wpim_activate' );

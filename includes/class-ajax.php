@@ -14,6 +14,7 @@ class WPIM_Ajax {
             'wpim_get_converted',
             'wpim_get_deleted',
             'wpim_restore_deleted',
+            'wpim_restore_all_batch',
             'wpim_restore_converted',
             'wpim_toggle_auto_webp',
             'wpim_conversion_stats',
@@ -165,6 +166,14 @@ class WPIM_Ajax {
         $result   = $restorer->restore_deleted( $id );
         if ( $result['success'] ) wp_send_json_success( $result );
         else wp_send_json_error( $result['message'] );
+    }
+
+    public function handle_restore_all_batch() {
+        $this->verify();
+        $this->set_limits();
+        $restorer = new WPIM_Restorer();
+        $result   = $restorer->restore_all_batch( 15 );
+        wp_send_json_success( $result );
     }
 
     public function handle_restore_converted() {

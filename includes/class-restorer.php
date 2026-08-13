@@ -108,21 +108,31 @@ class WPIM_Restorer {
         global $wpdb;
         $post_data = $meta['post'];
         unset( $post_data['ID'] );
-        $post_data['ID'] = $id;
 
+        // WordPress can reassign a freed auto-increment ID to a later,
+        // completely unrelated upload — so a post already existing at $id
+        // does NOT mean it's safe to treat as "this attachment, still here".
+        // The old behavior (wp_update_post onto it) silently overwrote that
+        // other attachment's title/file reference. Insert as a new post
+        // instead of reusing a numeric ID something else has since claimed.
         $existing = get_post( $id );
         if ( $existing ) {
-            wp_update_post( $post_data );
-        } else {
-            // A raw insert (needed to reuse the original ID) bypasses
-            // wp_insert_post()'s cache invalidation, so on sites with a
-            // persistent object cache (Memcached/Redis) the Media Library
-            // search keeps serving a stale result set that predates this row
-            // — clean_post_cache() bumps the same 'posts' cache group
-            // wp_insert_post() would, making it show up immediately.
             $wpdb->insert( $wpdb->posts, $post_data );
-            clean_post_cache( $id );
+            $restored_id = (int) $wpdb->insert_id;
+            $id_reused   = true;
+        } else {
+            $post_data['ID'] = $id;
+            $wpdb->insert( $wpdb->posts, $post_data );
+            $restored_id = $id;
+            $id_reused   = false;
         }
+
+        // A raw insert bypasses wp_insert_post()'s cache invalidation, so on
+        // sites with a persistent object cache (Memcached/Redis) Media
+        // Library search keeps serving a stale result set that predates this
+        // row — clean_post_cache() bumps the same 'posts' cache group
+        // wp_insert_post() would, making it show up immediately.
+        clean_post_cache( $restored_id );
 
         // Restore postmeta (this includes the old, now-stale '_wp_attachment_metadata'
         // snapshot — overwritten below once thumbnails are regenerated)
@@ -130,12 +140,12 @@ class WPIM_Restorer {
         foreach ( $postmeta as $row ) {
             $exists = $wpdb->get_var( $wpdb->prepare(
                 "SELECT meta_id FROM {$wpdb->postmeta} WHERE post_id=%d AND meta_key=%s",
-                $id, $row['meta_key']
+                $restored_id, $row['meta_key']
             ));
             if ( $exists ) {
-                update_post_meta( $id, $row['meta_key'], maybe_unserialize( $row['meta_value'] ) );
+                update_post_meta( $restored_id, $row['meta_key'], maybe_unserialize( $row['meta_value'] ) );
             } else {
-                add_post_meta( $id, $row['meta_key'], maybe_unserialize( $row['meta_value'] ) );
+                add_post_meta( $restored_id, $row['meta_key'], maybe_unserialize( $row['meta_value'] ) );
             }
         }
 
@@ -144,14 +154,62 @@ class WPIM_Restorer {
         // changed since this attachment was deleted).
         $main_file = $meta['file'] ?? null;
         if ( $main_file && file_exists( $main_file ) ) {
-            $fresh_meta = wp_generate_attachment_metadata( $id, $main_file );
-            if ( $fresh_meta ) wp_update_attachment_metadata( $id, $fresh_meta );
+            $fresh_meta = wp_generate_attachment_metadata( $restored_id, $main_file );
+            if ( $fresh_meta ) wp_update_attachment_metadata( $restored_id, $fresh_meta );
         }
 
         // Clean up backup dir
         $this->rrmdir( $backup_id_dir );
 
+        if ( $id_reused ) {
+            return [
+                'success' => true,
+                'new_id'  => $restored_id,
+                'message' => "Attachment #{$id} was restored as new attachment #{$restored_id} because ID #{$id} is now used by a different upload. Anything elsewhere on the site still pointing at #{$id} by ID will show that other upload, not this one — it may need manual relinking.",
+            ];
+        }
+
         return [ 'success' => true, 'message' => "Attachment #{$id} restored successfully." ];
+    }
+
+    /**
+     * Restore every remaining deleted backup, one batch at a time, so a huge
+     * queue (thousands of images) can be recovered without needing to click
+     * Restore individually on each — used by the "Restore All" bulk action.
+     * Each call restores up to $limit and reports how many are left so the
+     * frontend can keep calling this across multiple requests (avoids PHP
+     * execution-time limits on large queues).
+     */
+    public function restore_all_batch( $limit = 20 ) {
+        $backup_dir = WPIM_BACKUP_DELETED;
+        $dirs = is_dir( $backup_dir ) ? glob( $backup_dir . '/*/meta.json' ) : [];
+        $dirs = $dirs ?: [];
+
+        $remaining_total = count( $dirs );
+        $batch = array_slice( $dirs, 0, $limit );
+
+        $restored = 0;
+        $reused   = 0;
+        $errors   = [];
+
+        foreach ( $batch as $meta_file ) {
+            $id     = (int) basename( dirname( $meta_file ) );
+            $result = $this->restore_deleted( $id );
+            if ( $result['success'] ) {
+                $restored++;
+                if ( ! empty( $result['new_id'] ) ) $reused++;
+            } else {
+                $errors[] = "#{$id}: " . $result['message'];
+            }
+        }
+
+        return [
+            'restored'  => $restored,
+            'reused'    => $reused,
+            'errors'    => $errors,
+            'remaining' => max( 0, $remaining_total - count( $batch ) ),
+            'done'      => $remaining_total <= count( $batch ),
+        ];
     }
 
     /**

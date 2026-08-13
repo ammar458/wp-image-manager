@@ -655,6 +655,50 @@
         loadDeletedList(1);
     });
 
+    $('#btn-restore-all').on('click', function() {
+        if (!confirm('Restore every remaining deleted backup? This can take a while for a large queue and will run in the background until done — do not close this tab.')) return;
+
+        var $btn = $(this).prop('disabled', true);
+        var totalRestored = 0, totalReused = 0, allErrors = [];
+        showProgress('#restore-all-progress', '#restore-all-progress-inner', '#restore-all-progress-text', 0, 'Restoring…');
+
+        function runNextBatch() {
+            ajax('wpim_restore_all_batch', {}, function(err, data) {
+                if (err) {
+                    allErrors.push(err);
+                    hideProgress('#restore-all-progress');
+                    $btn.prop('disabled', false);
+                    toast('Restore All stopped on an error: ' + err, 'error');
+                    return;
+                }
+
+                totalRestored += data.restored || 0;
+                totalReused += data.reused || 0;
+                if (data.errors && data.errors.length) allErrors = allErrors.concat(data.errors);
+
+                var msg = 'Restored ' + totalRestored + ' so far' + (data.remaining ? ' — ' + data.remaining + ' left…' : '…');
+                var pct = data.remaining ? Math.round((totalRestored / (totalRestored + data.remaining)) * 100) : 100;
+                showProgress('#restore-all-progress', '#restore-all-progress-inner', '#restore-all-progress-text', pct, msg);
+
+                if (data.done) {
+                    hideProgress('#restore-all-progress');
+                    $btn.prop('disabled', false);
+                    var summary = '✅ Restored ' + totalRestored + ' image(s).';
+                    if (totalReused) summary += ' ⚠️ ' + totalReused + ' had their original ID reused by something else and were restored as new attachments — check the messages for details.';
+                    if (allErrors.length) summary += ' ' + allErrors.length + ' error(s), see console.';
+                    if (allErrors.length) console.warn('Restore All errors:', allErrors);
+                    toast(summary, allErrors.length ? 'info' : 'success');
+                    loadDeletedList(1);
+                    return;
+                }
+
+                runNextBatch();
+            }, 150);
+        }
+
+        runNextBatch();
+    });
+
     function loadDeletedList(page) {
         state.deletedPage = page;
         $('#deleted-list').html('<p class="wpim-placeholder-sm">Loading…</p>');

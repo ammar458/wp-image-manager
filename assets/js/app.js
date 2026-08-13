@@ -17,6 +17,7 @@
         attachedTotalPages: 1,
         attachedSelected: {},
         attachedCategoriesLoaded: false,
+        gdriveStatusLoaded: false,
     };
 
     // ─── Toast ────────────────────────────────────────────────────────
@@ -53,6 +54,9 @@
         $('#tab-' + tab).addClass('active');
         if (tab === 'attached' && !state.attachedCategoriesLoaded) {
             loadAttachedCategories();
+        }
+        if (tab === 'gdrive-status' && !state.gdriveStatusLoaded) {
+            loadGdriveStatus();
         }
     });
 
@@ -549,6 +553,78 @@
             }
         }, 120);
     });
+
+    // ─── Google Drive Status ──────────────────────────────────────────
+    $('#btn-load-gdrive-status').on('click', function() { loadGdriveStatus(); });
+    $('#btn-gdrive-process-now').on('click', function() { processGdriveQueueNow(); });
+
+    function loadGdriveStatus() {
+        $('#gdrive-status-body').html('<p class="wpim-placeholder-sm">Loading…</p>');
+        $('#btn-gdrive-process-now').prop('disabled', true);
+        ajax('wpim_gdrive_status', {}, function(err, data) {
+            if (err) { toast('Error: ' + err, 'error'); return; }
+            state.gdriveStatusLoaded = true;
+            renderGdriveStatus(data);
+        }, 60);
+    }
+
+    function processGdriveQueueNow() {
+        var $btn = $('#btn-gdrive-process-now');
+        $btn.prop('disabled', true);
+        $('#gdrive-process-spinner').show();
+        ajax('wpim_gdrive_process_queue', {}, function(err, data) {
+            $('#gdrive-process-spinner').hide();
+            if (err) { toast('Error: ' + err, 'error'); $btn.prop('disabled', false); return; }
+            toast('✅ Queue processed.', 'success');
+            renderGdriveStatus(data);
+        }, 120);
+    }
+
+    function renderGdriveStatus(data) {
+        var d = data.deleted, c = data.converted;
+        var connHtml = data.connected
+            ? '✅ Connected to Google Drive as <strong>' + escHtml(data.account || '') + '</strong>'
+            : '⚠️ Not connected to Google Drive.';
+        var destHtml = data.destination === 'gdrive'
+            ? 'Backup destination: <strong>Google Drive</strong>'
+            : 'Backup destination: <strong>WordPress (local)</strong> — nothing is queued to upload.';
+
+        var html = '<p>' + connHtml + '<br>' + destHtml + '</p>';
+
+        html += '<h3 style="margin-top:20px">Deleted Image Backups</h3>';
+        html += '<div class="wpim-stats-bar wpim-gdrive-stats">'
+              +   '<div class="wpim-stat-card wpim-stat-total"><span class="wpim-stat-num">' + d.total + '</span><span class="wpim-stat-label">Total Backups</span></div>'
+              +   '<div class="wpim-stat-card wpim-stat-attached"><span class="wpim-stat-num">' + d.uploaded + '</span><span class="wpim-stat-label">Uploaded to Drive</span></div>'
+              +   '<div class="wpim-stat-card wpim-stat-webp"><span class="wpim-stat-num">' + d.pending + '</span><span class="wpim-stat-label">Queued / Pending Upload</span></div>'
+              +   '<div class="wpim-stat-card wpim-stat-unattached"><span class="wpim-stat-num">' + d.local + '</span><span class="wpim-stat-label">Local Only</span></div>'
+              + '</div>';
+
+        html += '<h3 style="margin-top:20px">Converted (WebP) Backups</h3>';
+        html += '<div class="wpim-stats-bar wpim-gdrive-stats">'
+              +   '<div class="wpim-stat-card wpim-stat-total"><span class="wpim-stat-num">' + c.total + '</span><span class="wpim-stat-label">Total Backups</span></div>'
+              +   '<div class="wpim-stat-card wpim-stat-attached"><span class="wpim-stat-num">' + c.uploaded + '</span><span class="wpim-stat-label">Uploaded to Drive</span></div>'
+              +   '<div class="wpim-stat-card wpim-stat-unattached"><span class="wpim-stat-num">' + c.local + '</span><span class="wpim-stat-label">Local Only</span></div>'
+              + '</div>';
+
+        if (data.errors && data.errors.length) {
+            html += '<h3 style="margin-top:20px">⚠️ Upload Errors (' + data.errors.length + ')</h3>';
+            html += '<p class="wpim-attached-warning">These are still queued and will keep retrying automatically, but have failed at least once — check the message below to see why (commonly an expired/revoked Google connection, or a Drive quota issue).</p>';
+            $.each(data.errors, function(i, e) {
+                html += '<div class="wpim-restore-item">'
+                      +   '<div class="wpim-restore-item-info">'
+                      +     '<div class="wpim-restore-item-title">ID: ' + e.id + ' &nbsp;·&nbsp; ' + escHtml(e.filename) + '</div>'
+                      +     '<div class="wpim-restore-item-meta" style="color:#d63638;white-space:normal">' + escHtml(e.error) + (e.deleted_at ? ' &nbsp;·&nbsp; Deleted: ' + escHtml(e.deleted_at) : '') + '</div>'
+                      +   '</div>'
+                      + '</div>';
+            });
+        }
+
+        $('#gdrive-status-body').html(html);
+
+        var canProcess = data.connected && data.destination === 'gdrive' && d.pending > 0;
+        $('#btn-gdrive-process-now').prop('disabled', !canProcess)
+            .attr('title', canProcess ? '' : (d.pending > 0 ? 'Connect Google Drive and set it as the backup destination first' : 'Nothing queued'));
+    }
 
     // ─── Restore Deleted ──────────────────────────────────────────────
     $('#btn-load-deleted').on('click', function() { loadDeletedList(1); });

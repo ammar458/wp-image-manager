@@ -55,6 +55,7 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
         <button class="wpim-tab" data-tab="convert">🔄 WebP Converter</button>
         <button class="wpim-tab" data-tab="restore-deleted">♻️ Restore Deleted</button>
         <button class="wpim-tab" data-tab="restore-converted">↩️ Revert WebP</button>
+        <button class="wpim-tab" data-tab="gdrive-status">☁️ Drive Status</button>
         <button class="wpim-tab<?php echo $wpim_active_tab === 'settings' ? ' active' : ''; ?>" data-tab="settings">⚙️ Backup Settings</button>
     </div>
 
@@ -229,6 +230,25 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-go">Go</button>
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-next" disabled>Next →</button>
                 <button class="wpim-btn wpim-btn-sm" id="btn-converted-last" disabled>Last »</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Google Drive Status -->
+    <div class="wpim-tab-content" id="tab-gdrive-status">
+        <div class="wpim-restore-panel">
+            <div class="wpim-restore-header">
+                <h2>☁️ Google Drive Backup Status</h2>
+                <p>How many backed-up images have actually finished uploading to Google Drive vs. are still local or stuck retrying.</p>
+                <button class="wpim-btn wpim-btn-sm" id="btn-load-gdrive-status">Refresh Status</button>
+                <button class="wpim-btn wpim-btn-sm wpim-btn-outline" id="btn-gdrive-process-now" disabled title="Load status first">
+                    <span class="wpim-spinner-inline" id="gdrive-process-spinner" style="display:none"></span>
+                    ⚙️ Process Upload Queue Now
+                </button>
+            </div>
+
+            <div id="gdrive-status-body">
+                <p class="wpim-placeholder-sm">Click "Refresh Status" to check.</p>
             </div>
         </div>
     </div>

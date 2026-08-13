@@ -17,6 +17,8 @@ class WPIM_Ajax {
             'wpim_restore_converted',
             'wpim_toggle_auto_webp',
             'wpim_conversion_stats',
+            'wpim_gdrive_status',
+            'wpim_gdrive_process_queue',
         ];
         foreach ( $actions as $action ) {
             add_action( 'wp_ajax_' . $action, [ $this, str_replace('wpim_', 'handle_', $action) ] );
@@ -185,6 +187,20 @@ class WPIM_Ajax {
         $this->verify();
         $converter = new WPIM_Converter();
         wp_send_json_success( $converter->get_conversion_stats() );
+    }
+
+    public function handle_gdrive_status() {
+        $this->verify();
+        $restorer = new WPIM_Restorer();
+        wp_send_json_success( $restorer->get_gdrive_status() );
+    }
+
+    public function handle_gdrive_process_queue() {
+        $this->verify();
+        $this->set_limits();
+        ( new WPIM_Deleter() )->process_gdrive_queue();
+        $restorer = new WPIM_Restorer();
+        wp_send_json_success( $restorer->get_gdrive_status() );
     }
 }
 

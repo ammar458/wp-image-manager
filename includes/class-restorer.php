@@ -219,6 +219,64 @@ class WPIM_Restorer {
         return [ 'items' => $items, 'total' => $total, 'pages' => ceil($total/$per_page) ];
     }
 
+    /**
+     * Google Drive backup status: how many deleted/converted images are still
+     * local-only, queued for upload, or confirmed on Drive — plus any that
+     * have been retrying and failing, so "did it actually upload?" has a
+     * concrete answer instead of just checking the Drive folder by hand.
+     */
+    public function get_gdrive_status() {
+        $status = [
+            'connected'   => WPIM_Google_Drive::is_connected(),
+            'account'     => WPIM_Google_Drive::get_account_email(),
+            'destination' => get_option( 'wpim_backup_destination', 'local' ),
+            'deleted'     => [ 'total' => 0, 'local' => 0, 'pending' => 0, 'uploaded' => 0 ],
+            'converted'   => [ 'total' => 0, 'local' => 0, 'uploaded' => 0 ],
+            'errors'      => [],
+        ];
+
+        $meta_files = glob( WPIM_BACKUP_DELETED . '/*/meta.json' );
+        foreach ( (array) $meta_files as $file ) {
+            $meta = json_decode( file_get_contents( $file ), true );
+            if ( ! $meta ) continue;
+
+            $status['deleted']['total']++;
+            $storage = $meta['storage'] ?? 'local';
+
+            if ( $storage === 'gdrive' ) {
+                $status['deleted']['uploaded']++;
+            } elseif ( $storage === 'gdrive_pending' ) {
+                $status['deleted']['pending']++;
+                if ( ! empty( $meta['last_upload_error'] ) ) {
+                    $status['errors'][] = [
+                        'id'         => $meta['id'] ?? 0,
+                        'filename'   => basename( $meta['file'] ?? '' ),
+                        'error'      => $meta['last_upload_error'],
+                        'deleted_at' => $meta['deleted_at'] ?? '',
+                    ];
+                }
+            } else {
+                $status['deleted']['local']++;
+            }
+        }
+
+        global $wpdb;
+        $converted_values = $wpdb->get_col(
+            "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_wpim_converted_to_webp'"
+        );
+        foreach ( $converted_values as $val ) {
+            $info = maybe_unserialize( $val );
+            $status['converted']['total']++;
+            if ( ( $info['storage'] ?? 'local' ) === 'gdrive' ) {
+                $status['converted']['uploaded']++;
+            } else {
+                $status['converted']['local']++;
+            }
+        }
+
+        return $status;
+    }
+
     private function rrmdir( $dir ) {
         if ( ! is_dir($dir) ) return;
         foreach ( glob( $dir . '/*' ) as $f ) {

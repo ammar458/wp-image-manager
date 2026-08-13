@@ -51,6 +51,7 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
     <!-- Tabs -->
     <div class="wpim-tabs">
         <button class="wpim-tab<?php echo $wpim_active_tab === 'unattached' ? ' active' : ''; ?>" data-tab="unattached">🗂️ Unattached Images</button>
+        <button class="wpim-tab" data-tab="attached">🏷️ Browse Attached</button>
         <button class="wpim-tab" data-tab="convert">🔄 WebP Converter</button>
         <button class="wpim-tab" data-tab="restore-deleted">♻️ Restore Deleted</button>
         <button class="wpim-tab" data-tab="restore-converted">↩️ Revert WebP</button>
@@ -89,6 +90,49 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
             <button class="wpim-btn wpim-btn-sm" id="btn-prev" disabled>← Prev</button>
             <span id="page-info">Page 1 of 1</span>
             <button class="wpim-btn wpim-btn-sm" id="btn-next" disabled>Next →</button>
+        </div>
+    </div>
+
+    <!-- Tab: Browse Attached -->
+    <div class="wpim-tab-content" id="tab-attached">
+        <div class="wpim-toolbar">
+            <label class="wpim-filter-label" for="attached-category-select">Filter by:</label>
+            <select id="attached-category-select" class="wpim-select">
+                <option value="">— Choose a category —</option>
+            </select>
+            <button class="wpim-btn wpim-btn-sm wpim-btn-outline" id="btn-refresh-categories">🔄 Refresh List</button>
+        </div>
+        <p class="wpim-attached-warning">
+            ⚠️ These images are currently referenced somewhere on your site — by post type, page builder, or a plugin. Deleting one here moves it to backup (restorable later), but whatever uses it will show a broken image until you restore it.
+        </p>
+
+        <div class="wpim-toolbar">
+            <label class="wpim-check-all-label">
+                <input type="checkbox" id="attached-check-all"> Select All on Page
+            </label>
+            <div class="wpim-toolbar-right">
+                <span id="attached-selected-count" class="wpim-selected-count">0 selected</span>
+                <button class="wpim-btn wpim-btn-danger" id="btn-attached-delete-selected" disabled>
+                    🗑️ Delete Selected (move to backup)
+                </button>
+            </div>
+        </div>
+
+        <div class="wpim-progress-bar" id="attached-delete-progress" style="display:none">
+            <div class="wpim-progress-inner" id="attached-delete-progress-inner"></div>
+            <span class="wpim-progress-text" id="attached-delete-progress-text">Deleting...</span>
+        </div>
+
+        <div id="wpim-attached-grid" class="wpim-images-grid">
+            <div class="wpim-placeholder">
+                <p>Choose a category above to browse attached images.</p>
+            </div>
+        </div>
+
+        <div class="wpim-pagination" id="attached-pagination" style="display:none">
+            <button class="wpim-btn wpim-btn-sm" id="btn-attached-prev" disabled>← Prev</button>
+            <span id="attached-page-info">Page 1 of 1</span>
+            <button class="wpim-btn wpim-btn-sm" id="btn-attached-next" disabled>Next →</button>
         </div>
     </div>
 

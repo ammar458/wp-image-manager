@@ -32,6 +32,9 @@ class WPIM_Deep_Scanner {
     /** @var array<int,bool> set of valid image attachment IDs, for validating candidate IDs */
     private $valid_ids = [];
 
+    /** @var array<int,string> post_id => post_type, built lazily as postmeta rows are scanned */
+    private $post_type_cache = [];
+
     /** Safety cap so a single request can't run forever on huge tables. */
     private $max_rows_per_table = 20000;
     private $batch_size = 2000;
@@ -78,22 +81,48 @@ class WPIM_Deep_Scanner {
 
     private function ensure_source_column() {
         global $wpdb;
-        $col = $wpdb->get_results( "SHOW COLUMNS FROM _wpim_attached_tmp LIKE 'source'" );
-        if ( empty( $col ) ) {
+        $cols = $wpdb->get_col( "SHOW COLUMNS FROM _wpim_attached_tmp", 0 );
+        if ( ! in_array( 'source', $cols, true ) ) {
             $wpdb->query( "ALTER TABLE _wpim_attached_tmp ADD COLUMN source VARCHAR(30) NOT NULL DEFAULT 'core'" );
+        }
+        if ( ! in_array( 'post_type', $cols, true ) ) {
+            $wpdb->query( "ALTER TABLE _wpim_attached_tmp ADD COLUMN post_type VARCHAR(32) NOT NULL DEFAULT ''" );
         }
     }
 
-    private function insert_id( $id, $source ) {
+    private function insert_id( $id, $source, $post_type = '' ) {
         global $wpdb;
         $id = (int) $id;
         if ( $id <= 0 || ! isset( $this->valid_ids[ $id ] ) ) return false;
         $wpdb->query( $wpdb->prepare(
-            "INSERT INTO _wpim_attached_tmp (aid, source) VALUES (%d, %s)
+            "INSERT INTO _wpim_attached_tmp (aid, source, post_type) VALUES (%d, %s, %s)
              ON DUPLICATE KEY UPDATE source = source", // keep first source, don't overwrite
-            $id, $source
+            $id, $source, (string) $post_type
         ) );
         return true;
+    }
+
+    /**
+     * Batch-resolve post_type for a set of post IDs into $post_type_cache,
+     * one query per unique batch instead of one query per row — postmeta
+     * scans can touch thousands of rows referencing a much smaller set of posts.
+     */
+    private function warm_post_type_cache( $post_ids ) {
+        global $wpdb;
+        $missing = array_diff( array_unique( array_map( 'intval', $post_ids ) ), array_keys( $this->post_type_cache ) );
+        if ( empty( $missing ) ) return;
+
+        $placeholders = implode( ',', array_fill( 0, count( $missing ), '%d' ) );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ID, post_type FROM {$wpdb->posts} WHERE ID IN ({$placeholders})",
+            $missing
+        ) );
+        foreach ( $rows as $row ) {
+            $this->post_type_cache[ (int) $row->ID ] = $row->post_type;
+        }
+        foreach ( $missing as $mid ) {
+            if ( ! isset( $this->post_type_cache[ $mid ] ) ) $this->post_type_cache[ $mid ] = '';
+        }
     }
 
     /**
@@ -355,6 +384,8 @@ class WPIM_Deep_Scanner {
 
             if ( empty( $rows ) ) break;
 
+            $this->warm_post_type_cache( wp_list_pluck( $rows, 'post_id' ) );
+
             foreach ( $rows as $row ) {
                 $last_id = (int) $row->meta_id;
                 $found = [];
@@ -378,8 +409,11 @@ class WPIM_Deep_Scanner {
                     $found = array_merge( $found, $this->match_filename_in_string( $val ) );
                 }
 
+                $source    = ( $row->meta_key === '_elementor_data' ) ? 'elementor' : 'postmeta-deep';
+                $post_type = $this->post_type_cache[ (int) $row->post_id ] ?? '';
+
                 foreach ( array_unique( $found ) as $id ) {
-                    if ( $this->insert_id( $id, 'postmeta-deep' ) ) $count++;
+                    if ( $this->insert_id( $id, $source, $post_type ) ) $count++;
                 }
             }
 
@@ -429,8 +463,10 @@ class WPIM_Deep_Scanner {
                 $found = $this->match_filename_in_string( $val );
             }
 
+            $source = ( strpos( $row->option_name, 'elementor_' ) === 0 ) ? 'elementor' : 'options-deep';
+
             foreach ( array_unique( $found ) as $id ) {
-                if ( $this->insert_id( $id, 'options-deep' ) ) $count++;
+                if ( $this->insert_id( $id, $source ) ) $count++;
             }
         }
 
@@ -447,7 +483,7 @@ class WPIM_Deep_Scanner {
         $count = 0;
 
         $rows = $wpdb->get_results( "
-            SELECT ID, post_content FROM {$wpdb->posts}
+            SELECT ID, post_type, post_content FROM {$wpdb->posts}
             WHERE post_type NOT IN ('attachment','revision')
             AND post_status NOT IN ('trash','auto-draft')
             AND (
@@ -460,7 +496,7 @@ class WPIM_Deep_Scanner {
 
         foreach ( $rows as $row ) {
             foreach ( $this->match_filename_in_string( $row->post_content ) as $id ) {
-                if ( $this->insert_id( $id, 'content-url' ) ) $count++;
+                if ( $this->insert_id( $id, 'content-url', $row->post_type ) ) $count++;
             }
         }
 

@@ -12,6 +12,11 @@
         convertedTotalPages: 1,
         convertOffset: 0,
         scanDone: false,
+        attachedCategory: '',
+        attachedPage: 1,
+        attachedTotalPages: 1,
+        attachedSelected: {},
+        attachedCategoriesLoaded: false,
     };
 
     // ─── Toast ────────────────────────────────────────────────────────
@@ -46,6 +51,9 @@
         $(this).addClass('active');
         $('.wpim-tab-content').removeClass('active');
         $('#tab-' + tab).addClass('active');
+        if (tab === 'attached' && !state.attachedCategoriesLoaded) {
+            loadAttachedCategories();
+        }
     });
 
     // ─── Scan ─────────────────────────────────────────────────────────
@@ -313,6 +321,191 @@
     // ─── Pagination ───────────────────────────────────────────────────
     $('#btn-prev').on('click', function() { if (state.currentPage > 1) loadPage(--state.currentPage); });
     $('#btn-next').on('click', function() { if (state.currentPage < state.totalPages) loadPage(++state.currentPage); });
+
+    // ─── Browse Attached ──────────────────────────────────────────────
+    $('#btn-refresh-categories').on('click', function() { loadAttachedCategories(); });
+
+    function loadAttachedCategories() {
+        $('#attached-category-select').prop('disabled', true);
+        ajax('wpim_get_attached_categories', {}, function(err, data) {
+            $('#attached-category-select').prop('disabled', false);
+            if (err) { toast('Error: ' + err, 'error'); return; }
+            state.attachedCategoriesLoaded = true;
+
+            var $sel = $('#attached-category-select');
+            var current = $sel.val();
+            $sel.empty().append('<option value="">— Choose a category —</option>');
+            if (!data.categories || !data.categories.length) {
+                $sel.append('<option value="" disabled>No attached images found — run a scan first</option>');
+                return;
+            }
+            $.each(data.categories, function(i, cat) {
+                $sel.append('<option value="' + escHtml(cat.key) + '">' + escHtml(cat.label) + ' (' + cat.count + ')</option>');
+            });
+            if (current) $sel.val(current);
+        }, 60);
+    }
+
+    $('#attached-category-select').on('change', function() {
+        var cat = $(this).val();
+        state.attachedCategory = cat;
+        state.attachedSelected = {};
+        if (!cat) {
+            $('#wpim-attached-grid').html('<div class="wpim-placeholder"><p>Choose a category above to browse attached images.</p></div>');
+            $('#attached-pagination').hide();
+            updateAttachedDeleteBtns();
+            return;
+        }
+        loadAttachedPage(1);
+    });
+
+    function loadAttachedPage(page) {
+        if (!state.attachedCategory) return;
+        $('#wpim-attached-grid').html('<div class="wpim-placeholder"><p>Loading page ' + page + '…</p></div>');
+        ajax('wpim_get_attached_page', { category: state.attachedCategory, page: page }, function(err, data) {
+            if (err) { toast('Error: ' + err, 'error'); return; }
+            state.attachedPage = data.current;
+            state.attachedTotalPages = data.pages;
+            renderAttachedGrid(data.images);
+            renderAttachedPagination();
+            updateAttachedDeleteBtns();
+        }, 60);
+    }
+
+    function renderAttachedGrid(images) {
+        if (!images || !images.length) {
+            $('#wpim-attached-grid').html('<div class="wpim-placeholder"><p>No images found in this category.</p></div>');
+            $('#attached-pagination').hide();
+            return;
+        }
+        var html = '';
+        $.each(images, function(i, img) {
+            var thumb = img.thumb
+                ? '<img class="wpim-card-thumb" src="' + escHtml(img.thumb) + '" alt="" loading="lazy">'
+                : '<div class="wpim-card-thumb-placeholder">🖼️</div>';
+            var sel = state.attachedSelected[img.id] ? ' selected' : '';
+            var chk = state.attachedSelected[img.id] ? ' checked' : '';
+            html += '<div class="wpim-attached-card' + sel + '" data-id="' + img.id + '">'
+                  + '<input type="checkbox" class="wpim-attached-card-check" data-id="' + img.id + '"' + chk + '>'
+                  + thumb
+                  + '<div class="wpim-card-badge">' + escHtml((img.mime || '').replace('image/', '')) + '</div>'
+                  + '<div class="wpim-card-info">'
+                  +   '<div class="wpim-card-name" title="' + escHtml(img.filename) + '">' + escHtml(img.filename) + '</div>'
+                  +   '<div class="wpim-card-meta"><span>' + img.size + '</span><span>' + img.date + '</span></div>'
+                  + '</div></div>';
+        });
+        $('#wpim-attached-grid').html(html);
+        $('#attached-check-all').prop('checked', false);
+    }
+
+    function renderAttachedPagination() {
+        if (state.attachedTotalPages <= 1) { $('#attached-pagination').hide(); return; }
+        $('#attached-pagination').show();
+        $('#attached-page-info').text('Page ' + state.attachedPage + ' of ' + state.attachedTotalPages);
+        $('#btn-attached-prev').prop('disabled', state.attachedPage <= 1);
+        $('#btn-attached-next').prop('disabled', state.attachedPage >= state.attachedTotalPages);
+    }
+
+    $(document).on('click', '.wpim-attached-card', function(e) {
+        if ($(e.target).is('input')) return;
+        var id = $(this).data('id');
+        if (state.attachedSelected[id]) {
+            delete state.attachedSelected[id];
+            $(this).removeClass('selected').find('.wpim-attached-card-check').prop('checked', false);
+        } else {
+            state.attachedSelected[id] = true;
+            $(this).addClass('selected').find('.wpim-attached-card-check').prop('checked', true);
+        }
+        updateAttachedDeleteBtns();
+    });
+
+    $(document).on('change', '.wpim-attached-card-check', function() {
+        var id = $(this).data('id');
+        if ($(this).is(':checked')) {
+            state.attachedSelected[id] = true;
+            $(this).closest('.wpim-attached-card').addClass('selected');
+        } else {
+            delete state.attachedSelected[id];
+            $(this).closest('.wpim-attached-card').removeClass('selected');
+        }
+        updateAttachedDeleteBtns();
+    });
+
+    $('#attached-check-all').on('change', function() {
+        var checked = $(this).is(':checked');
+        $('.wpim-attached-card').each(function() {
+            var id = $(this).data('id');
+            if (checked) {
+                state.attachedSelected[id] = true;
+                $(this).addClass('selected').find('.wpim-attached-card-check').prop('checked', true);
+            } else {
+                delete state.attachedSelected[id];
+                $(this).removeClass('selected').find('.wpim-attached-card-check').prop('checked', false);
+            }
+        });
+        updateAttachedDeleteBtns();
+    });
+
+    function updateAttachedDeleteBtns() {
+        var count = Object.keys(state.attachedSelected).length;
+        $('#attached-selected-count').text(count + ' selected');
+        $('#btn-attached-delete-selected').prop('disabled', count === 0);
+    }
+
+    $('#btn-attached-delete-selected').on('click', function() {
+        var ids = Object.keys(state.attachedSelected).map(Number);
+        if (!ids.length) return;
+        if (!confirm('Move ' + ids.length + ' image(s) to backup folder?\n\nThey are currently in use elsewhere on your site — whatever references them will show a broken image until you restore them. Continue?')) return;
+        doAttachedDelete(ids);
+    });
+
+    function doAttachedDelete(ids) {
+        var $btn = $('#btn-attached-delete-selected');
+        $btn.prop('disabled', true);
+
+        var chunks = [];
+        for (var i = 0; i < ids.length; i += DELETE_CHUNK_SIZE) {
+            chunks.push(ids.slice(i, i + DELETE_CHUNK_SIZE));
+        }
+
+        var chunkIndex = 0, totalDeleted = 0, allErrors = [];
+        showProgress('#attached-delete-progress', '#attached-delete-progress-inner', '#attached-delete-progress-text', 0, 'Moving 0 of ' + ids.length + ' images to backup…');
+
+        function runNextChunk() {
+            if (chunkIndex >= chunks.length) {
+                hideProgress('#attached-delete-progress');
+                $btn.prop('disabled', false);
+                state.attachedSelected = {};
+                var msg = '✅ Moved ' + totalDeleted + ' image(s) to backup.';
+                if (allErrors.length) msg += ' ⚠️ ' + allErrors.length + ' error(s).';
+                toast(msg, allErrors.length ? 'info' : 'success');
+                setTimeout(function() {
+                    loadAttachedPage(state.attachedPage);
+                    loadAttachedCategories();
+                }, 400);
+                return;
+            }
+
+            ajax('wpim_delete_batch', { ids: chunks[chunkIndex] }, function(err, data) {
+                if (err) {
+                    allErrors.push(err);
+                } else {
+                    totalDeleted += data.deleted;
+                    if (data.errors && data.errors.length) allErrors = allErrors.concat(data.errors);
+                }
+                chunkIndex++;
+                var doneCount = Math.min(chunkIndex * DELETE_CHUNK_SIZE, ids.length);
+                var pct = Math.round((chunkIndex / chunks.length) * 100);
+                showProgress('#attached-delete-progress', '#attached-delete-progress-inner', '#attached-delete-progress-text', pct, 'Moving ' + doneCount + ' of ' + ids.length + ' images to backup… (' + pct + '%)');
+                runNextChunk();
+            }, 180);
+        }
+
+        runNextChunk();
+    }
+
+    $('#btn-attached-prev').on('click', function() { if (state.attachedPage > 1) loadAttachedPage(--state.attachedPage); });
+    $('#btn-attached-next').on('click', function() { if (state.attachedPage < state.attachedTotalPages) loadAttachedPage(++state.attachedPage); });
 
     // ─── Progress helpers ─────────────────────────────────────────────
     function showProgress(bar, inner, text, pct, msg) {

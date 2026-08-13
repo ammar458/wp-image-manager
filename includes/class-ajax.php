@@ -7,6 +7,8 @@ class WPIM_Ajax {
             'wpim_scan',
             'wpim_deep_scan',
             'wpim_get_page',
+            'wpim_get_attached_categories',
+            'wpim_get_attached_page',
             'wpim_delete_batch',
             'wpim_bulk_convert',
             'wpim_get_converted',
@@ -79,6 +81,32 @@ class WPIM_Ajax {
             // Build temp table if not already built this request
             $scanner->maybe_build_attached_temp_table();
             $data = $scanner->get_unattached_page( $page, 100 );
+            wp_send_json_success( $data );
+        } catch ( Exception $e ) {
+            wp_send_json_error( 'Page load error: ' . $e->getMessage() );
+        }
+    }
+
+    public function handle_get_attached_categories() {
+        $this->verify();
+        $scanner = new WPIM_Scanner();
+        try {
+            $categories = $scanner->get_attached_categories();
+            wp_send_json_success( [ 'categories' => $categories ] );
+        } catch ( Exception $e ) {
+            wp_send_json_error( 'Error loading categories: ' . $e->getMessage() );
+        }
+    }
+
+    public function handle_get_attached_page() {
+        $this->verify();
+        $this->set_limits();
+        $category = isset( $_POST['category'] ) ? sanitize_text_field( wp_unslash( $_POST['category'] ) ) : '';
+        $page     = intval( $_POST['page'] ?? 1 );
+        if ( ! $category ) wp_send_json_error( 'No category specified.' );
+        $scanner = new WPIM_Scanner();
+        try {
+            $data = $scanner->get_attached_page( $category, $page, 100 );
             wp_send_json_success( $data );
         } catch ( Exception $e ) {
             wp_send_json_error( 'Page load error: ' . $e->getMessage() );

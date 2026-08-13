@@ -114,7 +114,14 @@ class WPIM_Restorer {
         if ( $existing ) {
             wp_update_post( $post_data );
         } else {
+            // A raw insert (needed to reuse the original ID) bypasses
+            // wp_insert_post()'s cache invalidation, so on sites with a
+            // persistent object cache (Memcached/Redis) the Media Library
+            // search keeps serving a stale result set that predates this row
+            // — clean_post_cache() bumps the same 'posts' cache group
+            // wp_insert_post() would, making it show up immediately.
             $wpdb->insert( $wpdb->posts, $post_data );
+            clean_post_cache( $id );
         }
 
         // Restore postmeta (this includes the old, now-stale '_wp_attachment_metadata'

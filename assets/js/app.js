@@ -389,6 +389,11 @@
                 : '<div class="wpim-card-thumb-placeholder">🖼️</div>';
             var sel = state.attachedSelected[img.id] ? ' selected' : '';
             var chk = state.attachedSelected[img.id] ? ' checked' : '';
+            var loc = img.attached_to || {};
+            var locLabel = loc.label || 'Unknown location';
+            var locHtml = loc.link
+                ? '<a class="wpim-card-attached" href="' + escHtml(loc.link) + '" target="_blank" rel="noopener" title="' + escHtml(locLabel) + '">📍 ' + escHtml(locLabel) + '</a>'
+                : '<span class="wpim-card-attached" title="' + escHtml(locLabel) + '">📍 ' + escHtml(locLabel) + '</span>';
             html += '<div class="wpim-attached-card' + sel + '" data-id="' + img.id + '">'
                   + '<input type="checkbox" class="wpim-attached-card-check" data-id="' + img.id + '"' + chk + '>'
                   + thumb
@@ -396,6 +401,7 @@
                   + '<div class="wpim-card-info">'
                   +   '<div class="wpim-card-name" title="' + escHtml(img.filename) + '">' + escHtml(img.filename) + '</div>'
                   +   '<div class="wpim-card-meta"><span>' + img.size + '</span><span>' + img.date + '</span></div>'
+                  +   locHtml
                   + '</div></div>';
         });
         $('#wpim-attached-grid').html(html);
@@ -411,7 +417,7 @@
     }
 
     $(document).on('click', '.wpim-attached-card', function(e) {
-        if ($(e.target).is('input')) return;
+        if ($(e.target).is('input, a')) return;
         var id = $(this).data('id');
         if (state.attachedSelected[id]) {
             delete state.attachedSelected[id];

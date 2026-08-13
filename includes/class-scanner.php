@@ -120,16 +120,18 @@ class WPIM_Scanner {
                 aid BIGINT UNSIGNED NOT NULL,
                 source VARCHAR(30) NOT NULL DEFAULT 'core',
                 post_type VARCHAR(32) NOT NULL DEFAULT '',
+                owner_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 PRIMARY KEY(aid)
             ) ENGINE=InnoDB
         ");
 
         // ── 1. Standard parent attachment ──────────────────────────────
         // post_type here is the PARENT post's type (e.g. 'boats'), not the
-        // attachment's own type, which is always 'attachment'.
+        // attachment's own type, which is always 'attachment'. owner_id is
+        // the parent post — where the image is actually attached.
         $wpdb->query("
-            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type)
-            SELECT p.ID, 'core', COALESCE(parent.post_type, '')
+            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type, owner_id)
+            SELECT p.ID, 'core', COALESCE(parent.post_type, ''), p.post_parent
             FROM {$wpdb->posts} p
             LEFT JOIN {$wpdb->posts} parent ON parent.ID = p.post_parent
             WHERE p.post_type = 'attachment'
@@ -140,8 +142,8 @@ class WPIM_Scanner {
 
         // ── 2. _thumbnail_id (featured images) ─────────────────────────
         $wpdb->query("
-            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type)
-            SELECT CAST(pm.meta_value AS UNSIGNED), 'thumbnail', COALESCE(owner.post_type, '')
+            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type, owner_id)
+            SELECT CAST(pm.meta_value AS UNSIGNED), 'thumbnail', COALESCE(owner.post_type, ''), pm.post_id
             FROM {$wpdb->postmeta} pm
             LEFT JOIN {$wpdb->posts} owner ON owner.ID = pm.post_id
             WHERE pm.meta_key = '_thumbnail_id'
@@ -152,8 +154,8 @@ class WPIM_Scanner {
         // ── 3. Numeric-only postmeta values that look like attachment IDs ──
         // Covers JetEngine image fields, ACF image fields (ID mode), etc.
         $wpdb->query("
-            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type)
-            SELECT CAST(pm.meta_value AS UNSIGNED), 'postmeta', COALESCE(owner.post_type, '')
+            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type, owner_id)
+            SELECT CAST(pm.meta_value AS UNSIGNED), 'postmeta', COALESCE(owner.post_type, ''), pm.post_id
             FROM {$wpdb->postmeta} pm
             LEFT JOIN {$wpdb->posts} owner ON owner.ID = pm.post_id
             WHERE pm.meta_value REGEXP '^[0-9]{1,10}$'
@@ -166,8 +168,8 @@ class WPIM_Scanner {
 
         // ── 4. Numeric-only usermeta (user profile images) ─────────────
         $wpdb->query("
-            INSERT IGNORE INTO _wpim_attached_tmp (aid, source)
-            SELECT DISTINCT CAST(meta_value AS UNSIGNED), 'usermeta'
+            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, owner_id)
+            SELECT DISTINCT CAST(meta_value AS UNSIGNED), 'usermeta', user_id
             FROM {$wpdb->usermeta}
             WHERE meta_value REGEXP '^[0-9]{1,10}$'
             AND CAST(meta_value AS UNSIGNED) > 0
@@ -176,8 +178,8 @@ class WPIM_Scanner {
         // ── 5. Numeric-only termmeta (category/tag images) ─────────────
         if ( $wpdb->get_var("SHOW TABLES LIKE '{$wpdb->termmeta}'") ) {
             $wpdb->query("
-                INSERT IGNORE INTO _wpim_attached_tmp (aid, source)
-                SELECT DISTINCT CAST(meta_value AS UNSIGNED), 'termmeta'
+                INSERT IGNORE INTO _wpim_attached_tmp (aid, source, owner_id)
+                SELECT DISTINCT CAST(meta_value AS UNSIGNED), 'termmeta', term_id
                 FROM {$wpdb->termmeta}
                 WHERE meta_value REGEXP '^[0-9]{1,10}$'
                 AND CAST(meta_value AS UNSIGNED) > 0
@@ -195,13 +197,15 @@ class WPIM_Scanner {
         ");
 
         // ── 7. wp-image-{ID} class in post content ─────────────────────
-        // Use MySQL REGEXP to find IDs without loading content into PHP
+        // Use MySQL REGEXP to find IDs without loading content into PHP.
+        // owner_id is the containing post (where the <img> tag lives).
         $wpdb->query("
-            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type)
+            INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type, owner_id)
             SELECT DISTINCT
                 CAST(REGEXP_SUBSTR(post_content, 'wp-image-([0-9]+)') AS UNSIGNED),
                 'content',
-                post_type
+                post_type,
+                ID
             FROM {$wpdb->posts}
             WHERE post_content LIKE '%wp-image-%'
             AND post_type NOT IN ('attachment','revision')
@@ -234,6 +238,9 @@ class WPIM_Scanner {
         }
         if ( ! in_array( 'post_type', $cols, true ) ) {
             $wpdb->query( "ALTER TABLE _wpim_attached_tmp ADD COLUMN post_type VARCHAR(32) NOT NULL DEFAULT ''" );
+        }
+        if ( ! in_array( 'owner_id', $cols, true ) ) {
+            $wpdb->query( "ALTER TABLE _wpim_attached_tmp ADD COLUMN owner_id BIGINT UNSIGNED NOT NULL DEFAULT 0" );
         }
     }
 
@@ -319,26 +326,28 @@ class WPIM_Scanner {
 
         $total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM _wpim_attached_tmp t WHERE {$where}" );
 
-        $ids = $wpdb->get_col( $wpdb->prepare("
-            SELECT t.aid FROM _wpim_attached_tmp t
+        $rows = $wpdb->get_results( $wpdb->prepare("
+            SELECT t.aid, t.source, t.post_type, t.owner_id FROM _wpim_attached_tmp t
             WHERE {$where}
             ORDER BY t.aid DESC
             LIMIT %d OFFSET %d
         ", $per_page, $offset ) );
 
         $images = [];
-        foreach ( $ids as $id ) {
+        foreach ( $rows as $row ) {
+            $id   = (int) $row->aid;
             $path = get_attached_file( $id );
             $size = ( $path && file_exists( $path ) ) ? filesize( $path ) : 0;
             $images[] = [
-                'id'       => (int) $id,
-                'title'    => get_the_title( $id ),
-                'url'      => wp_get_attachment_url( $id ),
-                'thumb'    => wp_get_attachment_image_url( $id, 'thumbnail' ),
-                'filename' => $path ? basename( $path ) : '',
-                'size'     => $size ? size_format( $size ) : 'N/A',
-                'date'     => get_the_date( 'Y-m-d', $id ),
-                'mime'     => get_post_mime_type( $id ),
+                'id'          => $id,
+                'title'       => get_the_title( $id ),
+                'url'         => wp_get_attachment_url( $id ),
+                'thumb'       => wp_get_attachment_image_url( $id, 'thumbnail' ),
+                'filename'    => $path ? basename( $path ) : '',
+                'size'        => $size ? size_format( $size ) : 'N/A',
+                'date'        => get_the_date( 'Y-m-d', $id ),
+                'mime'        => get_post_mime_type( $id ),
+                'attached_to' => $this->resolve_attachment_location( $row->source, (int) $row->owner_id ),
             ];
         }
 
@@ -348,6 +357,58 @@ class WPIM_Scanner {
             'pages'   => max( 1, ceil( $total / $per_page ) ),
             'current' => (int) $page,
         ];
+    }
+
+    /**
+     * Turn a temp-table row (source + owner_id) into a human-readable "where
+     * is this attached" label plus an edit link, for the Browse Attached tab.
+     * owner_id means different things per source (post ID, user ID, term ID)
+     * since it's populated differently per UNION branch in
+     * maybe_build_attached_temp_table() / WPIM_Deep_Scanner::insert_id().
+     */
+    private function resolve_attachment_location( $source, $owner_id ) {
+        switch ( $source ) {
+            case 'usermeta':
+                if ( $owner_id > 0 ) {
+                    $user = get_userdata( $owner_id );
+                    if ( $user ) {
+                        return [ 'label' => 'User: ' . $user->display_name, 'link' => get_edit_user_link( $owner_id ) ];
+                    }
+                }
+                return [ 'label' => 'User profile image', 'link' => '' ];
+
+            case 'termmeta':
+                if ( $owner_id > 0 ) {
+                    $term = get_term( $owner_id );
+                    if ( $term && ! is_wp_error( $term ) ) {
+                        $link = get_edit_term_link( $term );
+                        return [ 'label' => 'Term: ' . $term->name, 'link' => $link && ! is_wp_error( $link ) ? $link : '' ];
+                    }
+                }
+                return [ 'label' => 'Category/tag image', 'link' => '' ];
+
+            case 'options':
+            case 'options-deep':
+                return [ 'label' => 'Site option / widget', 'link' => admin_url( 'options-general.php' ) ];
+
+            case 'adrotate':
+                return [ 'label' => 'AdRotate advertisement', 'link' => '' ];
+        }
+
+        // Remaining sources (core, thumbnail, postmeta, postmeta-deep, elementor,
+        // content, content-url) attach owner_id to a post.
+        if ( $owner_id > 0 ) {
+            $post = get_post( $owner_id );
+            if ( $post ) {
+                $title      = get_the_title( $post );
+                $obj        = get_post_type_object( $post->post_type );
+                $type_label = $obj ? $obj->labels->singular_name : $post->post_type;
+                $link       = get_edit_post_link( $owner_id, '' );
+                return [ 'label' => ( $title !== '' ? $title : '(no title)' ) . ' (' . $type_label . ')', 'link' => $link ?: '' ];
+            }
+        }
+
+        return [ 'label' => 'Unknown location', 'link' => '' ];
     }
 
     /**

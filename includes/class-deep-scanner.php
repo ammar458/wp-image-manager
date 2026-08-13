@@ -88,16 +88,19 @@ class WPIM_Deep_Scanner {
         if ( ! in_array( 'post_type', $cols, true ) ) {
             $wpdb->query( "ALTER TABLE _wpim_attached_tmp ADD COLUMN post_type VARCHAR(32) NOT NULL DEFAULT ''" );
         }
+        if ( ! in_array( 'owner_id', $cols, true ) ) {
+            $wpdb->query( "ALTER TABLE _wpim_attached_tmp ADD COLUMN owner_id BIGINT UNSIGNED NOT NULL DEFAULT 0" );
+        }
     }
 
-    private function insert_id( $id, $source, $post_type = '' ) {
+    private function insert_id( $id, $source, $post_type = '', $owner_id = 0 ) {
         global $wpdb;
         $id = (int) $id;
         if ( $id <= 0 || ! isset( $this->valid_ids[ $id ] ) ) return false;
         $wpdb->query( $wpdb->prepare(
-            "INSERT INTO _wpim_attached_tmp (aid, source, post_type) VALUES (%d, %s, %s)
+            "INSERT INTO _wpim_attached_tmp (aid, source, post_type, owner_id) VALUES (%d, %s, %s, %d)
              ON DUPLICATE KEY UPDATE source = source", // keep first source, don't overwrite
-            $id, $source, (string) $post_type
+            $id, $source, (string) $post_type, (int) $owner_id
         ) );
         return true;
     }
@@ -413,7 +416,7 @@ class WPIM_Deep_Scanner {
                 $post_type = $this->post_type_cache[ (int) $row->post_id ] ?? '';
 
                 foreach ( array_unique( $found ) as $id ) {
-                    if ( $this->insert_id( $id, $source, $post_type ) ) $count++;
+                    if ( $this->insert_id( $id, $source, $post_type, $row->post_id ) ) $count++;
                 }
             }
 
@@ -496,7 +499,7 @@ class WPIM_Deep_Scanner {
 
         foreach ( $rows as $row ) {
             foreach ( $this->match_filename_in_string( $row->post_content ) as $id ) {
-                if ( $this->insert_id( $id, 'content-url', $row->post_type ) ) $count++;
+                if ( $this->insert_id( $id, 'content-url', $row->post_type, $row->ID ) ) $count++;
             }
         }
 

@@ -6,21 +6,42 @@ class WPIM_Restorer {
     /**
      * Get list of deleted image backups.
      */
-    public function get_deleted_backups( $page = 1, $per_page = 100 ) {
+    public function get_deleted_backups( $page = 1, $per_page = 100, $search = '' ) {
         $backup_dir = WPIM_BACKUP_DELETED;
-        if ( ! is_dir( $backup_dir ) ) return [ 'items' => [], 'total' => 0 ];
+        if ( ! is_dir( $backup_dir ) ) return [ 'items' => [], 'total' => 0, 'pages' => 1 ];
 
-        $items = [];
-        $dirs  = glob( $backup_dir . '/*/meta.json' );
-        if ( ! $dirs ) return [ 'items' => [], 'total' => 0 ];
+        $dirs = glob( $backup_dir . '/*/meta.json' );
+        if ( ! $dirs ) return [ 'items' => [], 'total' => 0, 'pages' => 1 ];
 
         rsort( $dirs ); // Newest first
+
+        // Search matches against filename/title, both of which only live inside
+        // meta.json (not the directory name), so a search requires decoding
+        // every backup up front rather than just the current page's slice.
+        $search = trim( $search );
+        $decoded = [];
+        if ( $search !== '' ) {
+            $needle = strtolower( $search );
+            $matched = [];
+            foreach ( $dirs as $meta_file ) {
+                $meta = json_decode( file_get_contents( $meta_file ), true );
+                if ( ! $meta ) continue;
+                $haystack = strtolower( basename( $meta['file'] ?? '' ) . ' ' . ( $meta['post']['post_title'] ?? '' ) );
+                if ( strpos( $haystack, $needle ) !== false ) {
+                    $matched[ $meta_file ] = $meta;
+                }
+            }
+            $dirs    = array_keys( $matched );
+            $decoded = $matched;
+        }
+
         $total  = count( $dirs );
         $offset = ( $page - 1 ) * $per_page;
         $slice  = array_slice( $dirs, $offset, $per_page );
 
+        $items = [];
         foreach ( $slice as $meta_file ) {
-            $meta = json_decode( file_get_contents( $meta_file ), true );
+            $meta = $decoded[ $meta_file ] ?? json_decode( file_get_contents( $meta_file ), true );
             if ( ! $meta ) continue;
             $items[] = [
                 'id'         => $meta['id'],
@@ -33,7 +54,7 @@ class WPIM_Restorer {
             ];
         }
 
-        return [ 'items' => $items, 'total' => $total, 'pages' => ceil($total/$per_page) ];
+        return [ 'items' => $items, 'total' => $total, 'pages' => max( 1, ceil( $total / $per_page ) ) ];
     }
 
     /**

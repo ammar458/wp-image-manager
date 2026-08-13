@@ -151,8 +151,9 @@ class WPIM_Ajax {
     public function handle_get_deleted() {
         $this->verify();
         $page     = intval( $_POST['page'] ?? 1 );
+        $search   = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
         $restorer = new WPIM_Restorer();
-        $data     = $restorer->get_deleted_backups( $page, 100 );
+        $data     = $restorer->get_deleted_backups( $page, 100, $search );
         wp_send_json_success( $data );
     }
 

@@ -194,6 +194,10 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
                 <p>These images were moved to your backup folder. Click Restore to bring them back.</p>
                 <button class="wpim-btn wpim-btn-sm" id="btn-load-deleted">Load Deleted Backups</button>
             </div>
+            <div class="wpim-toolbar">
+                <input type="text" id="deleted-search" class="wpim-select" placeholder="🔍 Search by filename or title…">
+                <button class="wpim-btn wpim-btn-sm wpim-btn-outline" id="btn-deleted-search-clear">Clear</button>
+            </div>
             <div id="deleted-list" class="wpim-restore-list">
                 <p class="wpim-placeholder-sm">Click "Load Deleted Backups" to see restorable images.</p>
             </div>

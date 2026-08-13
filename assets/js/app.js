@@ -8,6 +8,7 @@
         scanning: false,
         deletedPage: 1,
         deletedTotalPages: 1,
+        deletedSearch: '',
         convertedPage: 1,
         convertedTotalPages: 1,
         convertOffset: 0,
@@ -639,14 +640,29 @@
     $(document).on('click', '#btn-deleted-next', function() { loadDeletedList(++state.deletedPage); });
     $(document).on('click', '#btn-deleted-last', function() { loadDeletedList(state.deletedTotalPages); });
 
+    var deletedSearchTimer = null;
+    $('#deleted-search').on('input', function() {
+        var val = $(this).val();
+        clearTimeout(deletedSearchTimer);
+        deletedSearchTimer = setTimeout(function() {
+            state.deletedSearch = val;
+            loadDeletedList(1);
+        }, 350);
+    });
+    $('#btn-deleted-search-clear').on('click', function() {
+        $('#deleted-search').val('');
+        state.deletedSearch = '';
+        loadDeletedList(1);
+    });
+
     function loadDeletedList(page) {
         state.deletedPage = page;
         $('#deleted-list').html('<p class="wpim-placeholder-sm">Loading…</p>');
-        ajax('wpim_get_deleted', { page: page }, function(err, data) {
+        ajax('wpim_get_deleted', { page: page, search: state.deletedSearch }, function(err, data) {
             if (err) { toast('Error: ' + err, 'error'); return; }
             state.deletedTotalPages = data.pages || 1;
             if (!data.items || !data.items.length) {
-                $('#deleted-list').html('<p class="wpim-placeholder-sm">✅ No deleted backups found.</p>');
+                $('#deleted-list').html('<p class="wpim-placeholder-sm">' + (state.deletedSearch ? 'No matches for "' + escHtml(state.deletedSearch) + '".' : '✅ No deleted backups found.') + '</p>');
                 $('#deleted-pagination').hide();
                 return;
             }

@@ -22,6 +22,40 @@ class WPIM_Recovery {
     public function discover_gallery_field( $post_type ) {
         global $wpdb;
 
+        // Primary path: find any postmeta row, for a post of this type, whose
+        // value is a comma-separated list of 2+ numbers — the common Jet
+        // Engine gallery-field storage (one row, IDs joined with commas).
+        // This is a direct SQL scan rather than relying on the
+        // attached-images temp table, which only indexes meta values that
+        // are a single bare number and would miss this format entirely.
+        $rows = $wpdb->get_results( $wpdb->prepare( "
+            SELECT pm.post_id, pm.meta_key, pm.meta_value
+            FROM {$wpdb->postmeta} pm
+            INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = %s
+            WHERE pm.meta_value REGEXP '^[0-9]+(,[0-9]+){1,}$'
+            ORDER BY pm.post_id DESC
+            LIMIT 300
+        ", $post_type ) );
+
+        foreach ( $rows as $row ) {
+            if ( strpos( $row->meta_key, '_' ) === 0 ) continue; // skip protected/system meta
+
+            $ids = array_values( array_filter( array_map( 'intval', explode( ',', $row->meta_value ) ) ) );
+            if ( count( $ids ) < 2 ) continue;
+
+            if ( $this->ids_are_all_attachments( $ids ) ) {
+                return [
+                    'key'            => $row->meta_key,
+                    'format'         => 'csv',
+                    'sample_post_id' => (int) $row->post_id,
+                    'sample_count'   => count( $ids ),
+                ];
+            }
+        }
+
+        // Fallback: multi-row (same key repeated once per image) or a
+        // serialized-array value, discovered via a post the attached-images
+        // temp table already knows has several images.
         $scanner = new WPIM_Scanner();
         $scanner->maybe_build_attached_temp_table();
 
@@ -39,7 +73,7 @@ class WPIM_Recovery {
 
         $all_meta = get_post_meta( (int) $candidate_id );
         foreach ( $all_meta as $key => $values ) {
-            if ( $key === '_thumbnail_id' || strpos( $key, '_edit_' ) === 0 || strpos( $key, '_wp_' ) === 0 ) continue;
+            if ( $key === '_thumbnail_id' || strpos( $key, '_' ) === 0 ) continue;
 
             $ids    = [];
             $format = 'csv';
@@ -50,17 +84,12 @@ class WPIM_Recovery {
                 }
                 $format = 'multi-row';
             } else {
-                $ids = $this->extract_id_list( $values[0] ?? '' );
+                $ids    = $this->extract_id_list( $values[0] ?? '' );
                 $format = is_array( maybe_unserialize( $values[0] ?? '' ) ) ? 'array' : 'csv';
             }
 
             if ( count( $ids ) < 2 ) continue;
-
-            $valid = true;
-            foreach ( $ids as $id ) {
-                if ( get_post_type( $id ) !== 'attachment' ) { $valid = false; break; }
-            }
-            if ( ! $valid ) continue;
+            if ( ! $this->ids_are_all_attachments( $ids ) ) continue;
 
             return [
                 'key'            => $key,
@@ -71,6 +100,13 @@ class WPIM_Recovery {
         }
 
         return null;
+    }
+
+    private function ids_are_all_attachments( array $ids ) {
+        foreach ( $ids as $id ) {
+            if ( get_post_type( $id ) !== 'attachment' ) return false;
+        }
+        return true;
     }
 
     private function extract_id_list( $raw ) {

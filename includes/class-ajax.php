@@ -149,12 +149,23 @@ class WPIM_Ajax {
         wp_send_json_success( $data );
     }
 
+    /**
+     * A 'Y-m-d' date string, or '' if missing/malformed — shared by the
+     * deleted-backups search and the "Restore All" date-range scope.
+     */
+    private function get_date_param( $key ) {
+        $val = isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : '';
+        return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $val ) ? $val : '';
+    }
+
     public function handle_get_deleted() {
         $this->verify();
-        $page     = intval( $_POST['page'] ?? 1 );
-        $search   = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
-        $restorer = new WPIM_Restorer();
-        $data     = $restorer->get_deleted_backups( $page, 100, $search );
+        $page      = intval( $_POST['page'] ?? 1 );
+        $search    = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
+        $date_from = $this->get_date_param( 'date_from' );
+        $date_to   = $this->get_date_param( 'date_to' );
+        $restorer  = new WPIM_Restorer();
+        $data      = $restorer->get_deleted_backups( $page, 100, $search, $date_from, $date_to );
         wp_send_json_success( $data );
     }
 
@@ -171,8 +182,10 @@ class WPIM_Ajax {
     public function handle_restore_all_batch() {
         $this->verify();
         $this->set_limits();
-        $restorer = new WPIM_Restorer();
-        $result   = $restorer->restore_all_batch( 15 );
+        $date_from = $this->get_date_param( 'date_from' );
+        $date_to   = $this->get_date_param( 'date_to' );
+        $restorer  = new WPIM_Restorer();
+        $result    = $restorer->restore_all_batch( 15, $date_from, $date_to );
         wp_send_json_success( $result );
     }
 

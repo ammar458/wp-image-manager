@@ -9,6 +9,8 @@
         deletedPage: 1,
         deletedTotalPages: 1,
         deletedSearch: '',
+        deletedDateFrom: '',
+        deletedDateTo: '',
         convertedPage: 1,
         convertedTotalPages: 1,
         convertOffset: 0,
@@ -649,21 +651,33 @@
             loadDeletedList(1);
         }, 350);
     });
+    $('#deleted-date-from, #deleted-date-to').on('change', function() {
+        state.deletedDateFrom = $('#deleted-date-from').val();
+        state.deletedDateTo = $('#deleted-date-to').val();
+        loadDeletedList(1);
+    });
     $('#btn-deleted-search-clear').on('click', function() {
         $('#deleted-search').val('');
+        $('#deleted-date-from').val('');
+        $('#deleted-date-to').val('');
         state.deletedSearch = '';
+        state.deletedDateFrom = '';
+        state.deletedDateTo = '';
         loadDeletedList(1);
     });
 
     $('#btn-restore-all').on('click', function() {
-        if (!confirm('Restore every remaining deleted backup? This can take a while for a large queue and will run in the background until done — do not close this tab.')) return;
+        var rangeNote = (state.deletedDateFrom || state.deletedDateTo)
+            ? ' This will be scoped to the date range currently set above (' + (state.deletedDateFrom || 'any') + ' to ' + (state.deletedDateTo || 'any') + ').'
+            : ' No date range is set, so this restores EVERYTHING in the backup queue, including old backups unrelated to any recent incident.';
+        if (!confirm('Restore deleted backups?' + rangeNote + ' This can take a while for a large queue and will run in the background until done — do not close this tab.')) return;
 
         var $btn = $(this).prop('disabled', true);
         var totalRestored = 0, totalReused = 0, allErrors = [];
         showProgress('#restore-all-progress', '#restore-all-progress-inner', '#restore-all-progress-text', 0, 'Restoring…');
 
         function runNextBatch() {
-            ajax('wpim_restore_all_batch', {}, function(err, data) {
+            ajax('wpim_restore_all_batch', { date_from: state.deletedDateFrom, date_to: state.deletedDateTo }, function(err, data) {
                 if (err) {
                     allErrors.push(err);
                     hideProgress('#restore-all-progress');
@@ -702,11 +716,12 @@
     function loadDeletedList(page) {
         state.deletedPage = page;
         $('#deleted-list').html('<p class="wpim-placeholder-sm">Loading…</p>');
-        ajax('wpim_get_deleted', { page: page, search: state.deletedSearch }, function(err, data) {
+        ajax('wpim_get_deleted', { page: page, search: state.deletedSearch, date_from: state.deletedDateFrom, date_to: state.deletedDateTo }, function(err, data) {
             if (err) { toast('Error: ' + err, 'error'); return; }
             state.deletedTotalPages = data.pages || 1;
+            var hasFilter = state.deletedSearch || state.deletedDateFrom || state.deletedDateTo;
             if (!data.items || !data.items.length) {
-                $('#deleted-list').html('<p class="wpim-placeholder-sm">' + (state.deletedSearch ? 'No matches for "' + escHtml(state.deletedSearch) + '".' : '✅ No deleted backups found.') + '</p>');
+                $('#deleted-list').html('<p class="wpim-placeholder-sm">' + (hasFilter ? 'No matches for the current search/date filter.' : '✅ No deleted backups found.') + '</p>');
                 $('#deleted-pagination').hide();
                 return;
             }

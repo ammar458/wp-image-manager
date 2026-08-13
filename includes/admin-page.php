@@ -197,6 +197,10 @@ $wpim_active_tab = ( isset( $_GET['tab'] ) && $_GET['tab'] === 'settings' ) ? 's
             </div>
             <div class="wpim-toolbar">
                 <input type="text" id="deleted-search" class="wpim-select" placeholder="🔍 Search by filename or title…">
+                <label class="wpim-filter-label" for="deleted-date-from">Deleted:</label>
+                <input type="date" id="deleted-date-from" class="wpim-select" style="min-width:auto">
+                <span>to</span>
+                <input type="date" id="deleted-date-to" class="wpim-select" style="min-width:auto">
                 <button class="wpim-btn wpim-btn-sm wpim-btn-outline" id="btn-deleted-search-clear">Clear</button>
             </div>
             <div class="wpim-progress-bar" id="restore-all-progress" style="display:none">

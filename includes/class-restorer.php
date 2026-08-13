@@ -6,7 +6,7 @@ class WPIM_Restorer {
     /**
      * Get list of deleted image backups.
      */
-    public function get_deleted_backups( $page = 1, $per_page = 100, $search = '' ) {
+    public function get_deleted_backups( $page = 1, $per_page = 100, $search = '', $date_from = '', $date_to = '' ) {
         $backup_dir = WPIM_BACKUP_DELETED;
         if ( ! is_dir( $backup_dir ) ) return [ 'items' => [], 'total' => 0, 'pages' => 1 ];
 
@@ -15,19 +15,18 @@ class WPIM_Restorer {
 
         rsort( $dirs ); // Newest first
 
-        // Search matches against filename/title, both of which only live inside
-        // meta.json (not the directory name), so a search requires decoding
-        // every backup up front rather than just the current page's slice.
+        // A search or date-range filter matches against fields that only live
+        // inside meta.json (not the directory name), so filtering requires
+        // decoding every backup up front rather than just the current page's
+        // slice.
         $search = trim( $search );
         $decoded = [];
-        if ( $search !== '' ) {
-            $needle = strtolower( $search );
+        if ( $search !== '' || $date_from || $date_to ) {
             $matched = [];
             foreach ( $dirs as $meta_file ) {
                 $meta = json_decode( file_get_contents( $meta_file ), true );
                 if ( ! $meta ) continue;
-                $haystack = strtolower( basename( $meta['file'] ?? '' ) . ' ' . ( $meta['post']['post_title'] ?? '' ) );
-                if ( strpos( $haystack, $needle ) !== false ) {
+                if ( $this->backup_matches_filters( $meta, $search, $date_from, $date_to ) ) {
                     $matched[ $meta_file ] = $meta;
                 }
             }
@@ -55,6 +54,28 @@ class WPIM_Restorer {
         }
 
         return [ 'items' => $items, 'total' => $total, 'pages' => max( 1, ceil( $total / $per_page ) ) ];
+    }
+
+    /**
+     * Shared by get_deleted_backups() (search box) and restore_all_batch()
+     * (scoping "Restore All" to a date range) so both filter identically.
+     * $date_from/$date_to are 'Y-m-d' strings compared against the date
+     * portion of 'deleted_at' (stored as full 'Y-m-d H:i:s').
+     */
+    private function backup_matches_filters( $meta, $search, $date_from, $date_to ) {
+        if ( $search !== '' ) {
+            $haystack = strtolower( basename( $meta['file'] ?? '' ) . ' ' . ( $meta['post']['post_title'] ?? '' ) );
+            if ( strpos( $haystack, strtolower( $search ) ) === false ) return false;
+        }
+
+        if ( $date_from || $date_to ) {
+            $deleted_date = substr( $meta['deleted_at'] ?? '', 0, 10 );
+            if ( $deleted_date === '' ) return false;
+            if ( $date_from && $deleted_date < $date_from ) return false;
+            if ( $date_to && $deleted_date > $date_to ) return false;
+        }
+
+        return true;
     }
 
     /**
@@ -180,10 +201,21 @@ class WPIM_Restorer {
      * frontend can keep calling this across multiple requests (avoids PHP
      * execution-time limits on large queues).
      */
-    public function restore_all_batch( $limit = 20 ) {
+    public function restore_all_batch( $limit = 20, $date_from = '', $date_to = '' ) {
         $backup_dir = WPIM_BACKUP_DELETED;
         $dirs = is_dir( $backup_dir ) ? glob( $backup_dir . '/*/meta.json' ) : [];
         $dirs = $dirs ?: [];
+
+        if ( $date_from || $date_to ) {
+            $scoped = [];
+            foreach ( $dirs as $meta_file ) {
+                $meta = json_decode( file_get_contents( $meta_file ), true );
+                if ( $meta && $this->backup_matches_filters( $meta, '', $date_from, $date_to ) ) {
+                    $scoped[] = $meta_file;
+                }
+            }
+            $dirs = $scoped;
+        }
 
         $remaining_total = count( $dirs );
         $batch = array_slice( $dirs, 0, $limit );

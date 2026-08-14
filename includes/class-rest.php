@@ -44,6 +44,12 @@ class WPIM_Rest {
             'permission_callback' => function () { return current_user_can( 'manage_options' ); },
             'callback'            => [ $this, 'handle_regen_css' ],
         ] );
+
+        register_rest_route( 'wpim/v1', '/set-elementor-data', [
+            'methods'             => 'POST',
+            'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+            'callback'            => [ $this, 'handle_set_elementor_data' ],
+        ] );
     }
 
     public function handle_inspect( $req ) {
@@ -114,6 +120,26 @@ class WPIM_Rest {
         $recovery = new WPIM_Recovery();
         $ok       = $recovery->regenerate_elementor_css( $post_id );
         return [ 'post_id' => $post_id, 'css_regenerated' => $ok ];
+    }
+
+    public function handle_set_elementor_data( WP_REST_Request $req ) {
+        $post_id = (int) $req->get_param( 'post_id' );
+        $json    = $req->get_param( 'data_json' );
+
+        if ( ! $post_id || ! is_string( $json ) || $json === '' ) {
+            return new WP_Error( 'wpim_bad_request', 'post_id and data_json are required.', [ 'status' => 400 ] );
+        }
+
+        json_decode( $json );
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return new WP_Error( 'wpim_bad_json', 'data_json is not valid JSON: ' . json_last_error_msg(), [ 'status' => 400 ] );
+        }
+
+        $recovery = new WPIM_Recovery();
+        $recovery->write_elementor_data_raw( $post_id, $json );
+        $css_regenerated = $recovery->regenerate_elementor_css( $post_id );
+
+        return [ 'success' => true, 'post_id' => $post_id, 'css_regenerated' => $css_regenerated ];
     }
 }
 

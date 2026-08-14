@@ -264,7 +264,7 @@ class WPIM_Recovery {
             return [ 'success' => false, 'error' => 'No matching image reference found in _elementor_data.', 'new_attachment_id' => $new_id ];
         }
 
-        update_post_meta( $post_id, '_elementor_data', wp_json_encode( $data ) );
+        $this->write_elementor_data_raw( $post_id, wp_json_encode( $data ) );
 
         $css_regenerated = $this->regenerate_elementor_css( $post_id );
 
@@ -275,6 +275,30 @@ class WPIM_Recovery {
             'replacements'      => $replacements,
             'css_regenerated'   => $css_regenerated,
         ];
+    }
+
+    /**
+     * Writes _elementor_data via a direct $wpdb query instead of
+     * update_post_meta(). Something in this site's save path — a filter on
+     * update_post_metadata, possibly Elementor's own sanitizer applying
+     * stricter rules outside its normal editor-save context — silently
+     * unescaped a quote inside a dynamic-tag placeholder
+     * (["field id=\"topic\"]" lost its backslashes) the one time this went
+     * through update_post_meta(), corrupting otherwise-valid JSON. Writing
+     * the exact bytes straight to postmeta sidesteps whatever that filter
+     * is; the object cache still needs clearing so subsequent reads in the
+     * same and later requests see the new value instead of a stale one.
+     */
+    public function write_elementor_data_raw( $post_id, $json_string ) {
+        global $wpdb;
+        $wpdb->update(
+            $wpdb->postmeta,
+            [ 'meta_value' => $json_string ],
+            [ 'post_id' => $post_id, 'meta_key' => '_elementor_data' ],
+            [ '%s' ],
+            [ '%d', '%s' ]
+        );
+        wp_cache_delete( $post_id, 'post_meta' );
     }
 
     /**

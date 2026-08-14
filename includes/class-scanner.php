@@ -151,6 +151,16 @@ class WPIM_Scanner {
             AND CAST(pm.meta_value AS UNSIGNED) > 0
         ");
 
+        // A bare numeric value alone is weak evidence that a postmeta/user/
+        // term-meta row references an attachment — price, engine_hours, a
+        // taxonomy term ID, or a visit counter can just as easily coincide
+        // with some unrelated image's ID number. That false match hides a
+        // genuinely orphaned image from the Unattached Images list. Requiring
+        // the meta key itself to read like an image/media field (matches
+        // ACF, JetEngine, Meta Box, and similar plugins' naming) filters
+        // those coincidences out.
+        $image_key_pattern = 'image|img|photo|picture|pic|gallery|thumb|avatar|logo|icon|banner|media|featured|cover|attachment';
+
         // ── 3. Numeric-only postmeta values that look like attachment IDs ──
         // Covers JetEngine image fields, ACF image fields (ID mode), etc.
         $wpdb->query("
@@ -160,6 +170,7 @@ class WPIM_Scanner {
             LEFT JOIN {$wpdb->posts} owner ON owner.ID = pm.post_id
             WHERE pm.meta_value REGEXP '^[0-9]{1,10}$'
             AND CAST(pm.meta_value AS UNSIGNED) > 0
+            AND LOWER(pm.meta_key) REGEXP '{$image_key_pattern}'
             AND pm.meta_key NOT IN (
                 '_edit_lock','_edit_last','_wp_trash_meta_time','comment_count',
                 '_wp_page_template','menu_order','post_parent'
@@ -179,6 +190,7 @@ class WPIM_Scanner {
             LEFT JOIN {$wpdb->posts} owner ON owner.ID = pm.post_id
             WHERE pm.meta_value REGEXP '^[0-9]+(,[0-9]+){1,}$'
             AND pm.meta_key NOT LIKE '\\_%'
+            AND LOWER(pm.meta_key) REGEXP '{$image_key_pattern}'
         ");
         $csv_values = [];
         foreach ( $csv_rows as $row ) {
@@ -198,6 +210,7 @@ class WPIM_Scanner {
             FROM {$wpdb->usermeta}
             WHERE meta_value REGEXP '^[0-9]{1,10}$'
             AND CAST(meta_value AS UNSIGNED) > 0
+            AND LOWER(meta_key) REGEXP '{$image_key_pattern}'
         ");
 
         // ── 5. Numeric-only termmeta (category/tag images) ─────────────
@@ -208,6 +221,7 @@ class WPIM_Scanner {
                 FROM {$wpdb->termmeta}
                 WHERE meta_value REGEXP '^[0-9]{1,10}$'
                 AND CAST(meta_value AS UNSIGNED) > 0
+                AND LOWER(meta_key) REGEXP '{$image_key_pattern}'
             ");
         }
 

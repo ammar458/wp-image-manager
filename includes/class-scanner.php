@@ -166,6 +166,31 @@ class WPIM_Scanner {
             )
         ");
 
+        // ── 3b. Comma-packed ID lists in postmeta (e.g. Jet Engine gallery
+        // fields stored as one row holding "id1,id2,id3,...") ──────────
+        // MySQL has no clean way to explode a CSV string into rows, so this
+        // one branch splits in PHP instead of pure SQL — the row count here
+        // is bounded by how many posts actually have such a field, not by
+        // total image count, so it doesn't reintroduce the memory problem
+        // the rest of this method is written to avoid.
+        $csv_rows = $wpdb->get_results("
+            SELECT pm.post_id, pm.meta_value, owner.post_type
+            FROM {$wpdb->postmeta} pm
+            LEFT JOIN {$wpdb->posts} owner ON owner.ID = pm.post_id
+            WHERE pm.meta_value REGEXP '^[0-9]+(,[0-9]+){1,}$'
+            AND pm.meta_key NOT LIKE '\\_%'
+        ");
+        $csv_values = [];
+        foreach ( $csv_rows as $row ) {
+            $post_type = $row->post_type ?: '';
+            foreach ( array_filter( array_map( 'intval', explode( ',', $row->meta_value ) ) ) as $id ) {
+                $csv_values[] = $wpdb->prepare( '(%d, %s, %s, %d)', $id, 'postmeta-csv', $post_type, $row->post_id );
+            }
+        }
+        foreach ( array_chunk( $csv_values, 500 ) as $chunk ) {
+            $wpdb->query( "INSERT IGNORE INTO _wpim_attached_tmp (aid, source, post_type, owner_id) VALUES " . implode( ',', $chunk ) );
+        }
+
         // ── 4. Numeric-only usermeta (user profile images) ─────────────
         $wpdb->query("
             INSERT IGNORE INTO _wpim_attached_tmp (aid, source, owner_id)

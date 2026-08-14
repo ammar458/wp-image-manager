@@ -38,6 +38,12 @@ class WPIM_Rest {
             'permission_callback' => function () { return current_user_can( 'manage_options' ); },
             'callback'            => [ $this, 'handle_fix_elementor_image' ],
         ] );
+
+        register_rest_route( 'wpim/v1', '/regen-css/(?P<id>\d+)', [
+            'methods'             => 'POST',
+            'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+            'callback'            => [ $this, 'handle_regen_css' ],
+        ] );
     }
 
     public function handle_inspect( $req ) {
@@ -101,6 +107,13 @@ class WPIM_Rest {
         $result   = $recovery->fix_elementor_image( $post_id, $old_id, $source );
 
         return rest_ensure_response( $result );
+    }
+
+    public function handle_regen_css( $req ) {
+        $post_id  = (int) $req['id'];
+        $recovery = new WPIM_Recovery();
+        $ok       = $recovery->regenerate_elementor_css( $post_id );
+        return [ 'post_id' => $post_id, 'css_regenerated' => $ok ];
     }
 }
 

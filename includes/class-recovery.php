@@ -266,19 +266,37 @@ class WPIM_Recovery {
 
         update_post_meta( $post_id, '_elementor_data', wp_json_encode( $data ) );
 
-        // Force Elementor to regenerate this page's cached CSS on next view —
-        // otherwise the fixed data is correct but the stale cached CSS file
-        // (missing the background-image rule entirely) keeps being served.
-        delete_post_meta( $post_id, '_elementor_css' );
-        $upload_dir = wp_upload_dir();
-        $css_file   = $upload_dir['basedir'] . '/elementor/css/post-' . $post_id . '.css';
-        if ( file_exists( $css_file ) ) @unlink( $css_file );
+        $css_regenerated = $this->regenerate_elementor_css( $post_id );
 
         return [
             'success'           => true,
             'new_attachment_id' => $new_id,
             'new_url'           => $new_url,
             'replacements'      => $replacements,
+            'css_regenerated'   => $css_regenerated,
         ];
+    }
+
+    /**
+     * Rebuilds Elementor's cached CSS for a post right now, in this request,
+     * rather than deleting the cache and hoping a later front-end visit
+     * regenerates it — that visit may never reach PHP at all if a page
+     * cache or CDN sits in front, which is exactly what left a data-correct
+     * fix invisible on the front end (regen ran, but from what looked like
+     * stale/empty data, producing an empty cached file).
+     */
+    public function regenerate_elementor_css( $post_id ) {
+        delete_post_meta( $post_id, '_elementor_css' );
+        $upload_dir = wp_upload_dir();
+        $css_file   = $upload_dir['basedir'] . '/elementor/css/post-' . $post_id . '.css';
+        if ( file_exists( $css_file ) ) @unlink( $css_file );
+
+        if ( class_exists( '\Elementor\Core\Files\CSS\Post' ) ) {
+            $css_file_obj = new \Elementor\Core\Files\CSS\Post( $post_id );
+            $css_file_obj->update();
+            return true;
+        }
+
+        return false;
     }
 }

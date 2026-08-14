@@ -78,6 +78,7 @@ class WPIM_Rest {
         $featured_url = $req->get_param( 'featured_image_url' );
         $gallery_urls = (array) $req->get_param( 'gallery_image_urls' );
         $dry_run      = (bool) $req->get_param( 'dry_run' );
+        $append       = (bool) $req->get_param( 'append' );
 
         if ( ! $post_id ) {
             return new WP_Error( 'wpim_bad_request', 'post_id is required.', [ 'status' => 400 ] );
@@ -91,7 +92,7 @@ class WPIM_Rest {
         if ( $featured_url && ! $is_https( $featured_url ) ) $featured_url = '';
 
         $recovery = new WPIM_Recovery();
-        $result   = $recovery->recover_post( $post_id, $post_type, $featured_url, $gallery_urls, $dry_run );
+        $result   = $recovery->recover_post( $post_id, $post_type, $featured_url, $gallery_urls, $dry_run, $append );
 
         return rest_ensure_response( $result );
     }

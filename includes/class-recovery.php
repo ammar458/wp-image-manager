@@ -146,9 +146,13 @@ class WPIM_Recovery {
     /**
      * Recovers one post's featured image and/or gallery from external URLs.
      * dry_run reports what would happen (including the detected gallery
-     * field) without downloading or writing anything.
+     * field) without downloading or writing anything. A gallery large enough
+     * to risk a PHP timeout mid-request needs to be recovered in several
+     * calls; $append merges each call's newly sideloaded IDs onto the
+     * field's current value instead of overwriting it, so chunk 2+ don't
+     * erase chunk 1's work.
      */
-    public function recover_post( $post_id, $post_type, $featured_url, array $gallery_urls, $dry_run = true ) {
+    public function recover_post( $post_id, $post_type, $featured_url, array $gallery_urls, $dry_run = true, $append = false ) {
         $post = get_post( $post_id );
         if ( ! $post || $post->post_type !== $post_type ) {
             return [ 'post_id' => $post_id, 'success' => false, 'error' => 'Post not found or type mismatch.' ];
@@ -193,7 +197,7 @@ class WPIM_Recovery {
                     $new_ids[] = $gid;
                 }
                 if ( $new_ids ) {
-                    $this->write_gallery_field( $post_id, $field, $new_ids );
+                    $this->write_gallery_field( $post_id, $field, $new_ids, $append );
                     $result['gallery_ids']    = $new_ids;
                     $result['gallery_field']  = $field['key'];
                 }
@@ -203,18 +207,22 @@ class WPIM_Recovery {
         return $result;
     }
 
-    private function write_gallery_field( $post_id, $field, $new_ids ) {
+    private function write_gallery_field( $post_id, $field, $new_ids, $append = false ) {
         $key = $field['key'];
         switch ( $field['format'] ) {
             case 'multi-row':
-                delete_post_meta( $post_id, $key );
+                if ( ! $append ) delete_post_meta( $post_id, $key );
                 foreach ( $new_ids as $id ) add_post_meta( $post_id, $key, $id );
                 break;
             case 'array':
-                update_post_meta( $post_id, $key, $new_ids );
+                $ids = $append ? array_merge( (array) get_post_meta( $post_id, $key, true ), $new_ids ) : $new_ids;
+                update_post_meta( $post_id, $key, array_values( array_unique( array_map( 'intval', $ids ) ) ) );
                 break;
             default: // csv
-                update_post_meta( $post_id, $key, implode( ',', $new_ids ) );
+                $existing = $append ? get_post_meta( $post_id, $key, true ) : '';
+                $ids      = $existing !== '' ? array_filter( array_map( 'intval', explode( ',', $existing ) ) ) : [];
+                $ids      = array_values( array_unique( array_merge( $ids, $new_ids ) ) );
+                update_post_meta( $post_id, $key, implode( ',', $ids ) );
         }
     }
 

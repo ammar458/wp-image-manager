@@ -394,7 +394,12 @@ class WPIM_Scanner {
      */
     public function get_posts_missing_images( $post_types = [ 'boats', 'dlr_boats' ] ) {
         global $wpdb;
-        $this->maybe_build_attached_temp_table();
+        // Always rebuild: this tab is the authoritative "what's actually
+        // missing" check, so it must never answer from a temp table left
+        // over from before a scanner-logic change (e.g. the CSV-packed
+        // gallery detection added in v1.16.3) — a stale table produces
+        // false "No Gallery Images" flags for listings that are fine.
+        $this->maybe_build_attached_temp_table( true );
 
         $placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
 

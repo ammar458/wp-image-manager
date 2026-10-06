@@ -115,9 +115,10 @@ a.wpim-card-attached:hover { color: var(--wpim-primary); text-decoration: underl
 .wpim-toggle input:checked + .wpim-toggle-slider { background: var(--wpim-success); }
 .wpim-toggle input:checked + .wpim-toggle-slider::before { transform: translateX(22px); }
 
-.wpim-convert-stats { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-.wpim-cstat { background: var(--wpim-bg); border-radius: 8px; padding: 14px 18px; text-align: center; flex: 1; min-width: 120px; }
-.wpim-cstat span { display: block; font-size: 26px; font-weight: 700; color: var(--wpim-primary); }
+.wpim-convert-stats { display: flex; align-items: stretch; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.wpim-cstat { background: var(--wpim-bg); border-radius: 8px; padding: 14px 18px; text-align: center; flex: 1; min-width: 120px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.wpim-cstat span { display: block; font-size: 26px; line-height: 1.2; font-weight: 700; color: var(--wpim-primary); }
+.wpim-cstat span#cstat-support { font-size: 15px; }
 .wpim-cstat small { color: #646970; font-size: 11px; }
 .wpim-convert-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
 .wpim-convert-note { font-size: 12px; color: #646970; font-style: italic; }
